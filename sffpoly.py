@@ -38,8 +38,10 @@ class SFFPoly(Poly):
         Examples
         ========
 
-        >>> f = 
-
+        >>> f = SFF(x + a * y, a ** 2 - 2, domain='FF(5)')
+        >>> g = SFF(x + 4 * a * y, a ** 2 - 2, domain='FF(5)')
+        >>> f + g
+        SFF(2 * x, domain='FF(5)')
         """
 
 
