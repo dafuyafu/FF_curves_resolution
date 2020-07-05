@@ -1,10 +1,10 @@
 from sympy.polys.polytools import Poly
 
 class SFFPoly(Poly):
-	""" 
-	represents a polynomial over a splitting finite field.
+    """ 
+    represents a polynomial over a splitting finite field.
 
-	Examples
+    Examples
     ========
 
     >>> from sympy.polys.polytools import Poly
@@ -16,24 +16,31 @@ class SFFPoly(Poly):
     >>> _f = y ** 2 * z ** 3 + 2 * x ** 5 + 2 * x ** 3 * z ** 2 - 2 * x * z ** 4
     >>> f = SFFPoly(_f, a ** 2 - 2, domain='FF(5)')
 
-	"""
+    """
 
-	def __new__(cls, rep, srep, *gens, **args):
+    def __new__(cls, rep, rel, *gens, **args):
         """Create a new polynomial instance via Poly.__new__()"""
-        opt = options.build_options(gens, args)
+        return super().__new__(cls, rep, *gens, **args)
 
-        if 'order' in opt:
-            raise NotImplementedError("'order' keyword is not implemented yet")
-
-        if iterable(rep, exclude=str):
-            if isinstance(rep, dict):
-                return cls._from_dict(rep, opt)
-            else:
-                return cls._from_list(list(rep), opt)
+    def __init__(self, rep, rel, *gens, **args):
+        if rel == None:
+            raise ValueError("Need a relational polynomial.")
         else:
-            rep = sympify(rep)
+            self.rel = rel
 
-            if rep.is_Poly:
-                return cls._from_poly(rep, opt)
-            else:
-                return cls._from_expr(rep, opt)
+    def is_the_same_domain_as(f,g):
+        return f.rel == g.rel
+
+    def add(f,g):
+        """
+        Add two polynomials ``f`` and ``g`` and divide it with rel polynomial
+
+        Examples
+        ========
+
+        >>> f = 
+
+        """
+
+
+
