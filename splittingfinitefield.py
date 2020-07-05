@@ -5,21 +5,22 @@
 
 '''
 
-"""Implementation of :class:`FiniteField` class. """
+"""Implementation of :class:`SplittingFiniteField` class. """
 
-from __future__ import print_function, division
+# from __future__ import print_function, division
 
 from sympy.polys.domains.field import Field
 from sympy.polys.domains.groundtypes import SymPyInteger
 from sympy.polys.domains.modularinteger import ModularIntegerFactory
 from sympy.polys.domains.simpledomain import SimpleDomain
 from sympy.polys.polyerrors import CoercionFailed
+from sympy.polys.polytools import poly
 from sympy.utilities import public
 
-class FiniteField(Field, SimpleDomain):
-    """General class for finite fields. """
+class SplittingFiniteField(Field, SimpleDomain):
+    """General class for splitting finite fields. """
 
-    rep = 'FF'
+    rep = 'SFF'
 
     is_FiniteField = is_FF = True
     is_Numerical = True
@@ -27,24 +28,36 @@ class FiniteField(Field, SimpleDomain):
     has_assoc_Ring = False
     has_assoc_Field = True
 
-    dom = None
-    mod = None
+    dom, mod = None, None
 
-    def __init__(self, mod, dom=None, symmetric=True):
+    def __init__(self, mod, poly=None, dom=None, symmetric=True):
         if mod <= 0:
             raise ValueError('modulus must be a positive integer, got %s' % mod)
         if dom is None:
             from sympy.polys.domains import ZZ
             dom = ZZ
+        if poly is None:
+            raise ValueError('a polynomial is required')
+        """
+            self.dtype has to be ModularIntegerModF for one Polynomial F, 
+            but the class has not been implemented yet. moreover we can 
+            identify the identity element of SFFs with the one of 
+            ModularIntegerModP as well as the zero element. 
 
+            FF(5) to SFF(5, x ** 2 - 1)
+            1 mapsto 1
+
+            above map is injective so below codes work fine.
+        """
         self.dtype = ModularIntegerFactory(mod, dom, symmetric, self)
         self.zero = self.dtype(0)
         self.one = self.dtype(1)
         self.dom = dom
         self.mod = mod
+        self.poly = poly
 
     def __str__(self):
-        return 'GF(%s)' % self.mod
+        return 'SFF(%s, %s)' % (self.mod, str(self.poly))
 
     def __hash__(self):
         return hash((self.__class__.__name__, self.dtype, self.mod, self.dom))
