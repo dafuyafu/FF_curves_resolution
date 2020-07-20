@@ -59,15 +59,15 @@ class SFFPoly(Poly):
 
     def sub(f,g):
         """
-        Add two polynomials ``f`` and ``g``
+        subtract two polynomials ``f`` and ``g``
 
         Examples
         ========
 
-        >>> f = SFF(x + a * y, a ** 2 - 2, domain='FF(5)')
+        >>> f = SFF(2 * x - a * y, a ** 2 - 2, domain='FF(5)')
         >>> g = SFF(x + 4 * a * y, a ** 2 - 2, domain='FF(5)')
-        >>> f + g
-        SFF(2 * x, x, modulus=5)
+        >>> f - g
+        SFF(x, x, a, modulus=5)
         """
         if f.domain != g.domain:
             raise ValueError("cannot add polynomials over different FFs")
@@ -79,15 +79,15 @@ class SFFPoly(Poly):
 
     def mul(f,g):
         """
-        Add two polynomials ``f`` and ``g``
+        multiple two polynomials ``f`` and ``g``
 
         Examples
         ========
 
-        >>> f = SFF(x + a * y, a ** 2 - 2, domain='FF(5)')
-        >>> g = SFF(x + 4 * a * y, a ** 2 - 2, domain='FF(5)')
-        >>> f + g
-        SFF(2 * x, x, modulus=5)
+        >>> f = SFFPoly(x - a * y, a ** 2 - 2, domain='FF(5)')
+        >>> g = SFFPoly(x - 2 * a * y, a ** 2 - 2, domain='FF(5)')
+        >>> f * g
+        SFFPoly(x ** 2 + 2 * a * x * y - y ** 2, x, modulus=5)
         """
         if f.domain != g.domain:
             raise ValueError("cannot add polynomials over different FFs")
@@ -96,6 +96,9 @@ class SFFPoly(Poly):
             return SFFPoly(_mul, f.rel, domain=f.domain)._simple_reduce()
         else:
             raise ValueError("cannot add polynomials over different SFFs")
+
+    def reduce(self):
+        """Not implemented yet."""
 
     def _simple_reduce(self):
         """
