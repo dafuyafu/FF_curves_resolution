@@ -34,8 +34,8 @@ class SFFPoly(Poly):
             self.rel_var = rel.gens[0]
             self.poly = Poly(rep, *gens, **args)
 
-    # def __str__(self):
-    #     print(self.poly.__str__() + 'on SFF(%s, %s)', (self.poly.modulus, self.poly.rel))
+    def __str__(self):
+        print("SFF" + self.poly.__str__() + " on " + str(self.rel))
 
     def add(f,g):
         """
@@ -49,35 +49,40 @@ class SFFPoly(Poly):
         >>> f + g
         SFF(2 * x, x, modulus=5)
         """
+        if f.domain != g.domain:
+            raise ValueError("cannot add polynomials over different FFs")
         if f.rel == g.rel:
             _sum = f.poly + g.poly
-            return SFFPoly(_sum, f.rel)
+            return SFFPoly(_sum, f.rel, domain=f.domain)._simple_reduce()
         else:
-            raise ValueError("cannot add polynomials over different SFF")
+            raise ValueError("cannot add polynomials over different SFFs")
 
-    def _reduce(self):
+    def _simple_reduce(self):
         """
-        Divide f by its relation polynomial and calculate the residue.
+        Divide f by its relation polynomial and calculate the residue
+        when f.rel is monovariate i.e. considering over simple extention field.
 
         Examples
         ========
         >>> f = SFF(a ** 2 * x + a * y, a ** 2 - 2, domain='FF(5)')
-        >>> f._reduce()
+        >>> f._simple_reduce()
         SFF(-2 * x + a * y, a ** 2 - 2, modulus=5)
         """
         if self.rel_var not in self.poly.gens:
             return self
 
-        _p = self.poly
-        _lm = Poly(LM(self.rel), domain=self.domain)
-        _rel = _lm - self.rel
-        while(_p.degree(self.rel_var) >= _lm.degree()):
-            _tlm = _lm
-            _trel = _rel
-            while(_p.degree(self.rel_var) > _tlm.degree()):
-                _tlm *= self.rel_var
-                _trel *= self.rel_var
-            _p = Poly(_poly.subs({_tlm: _rel}), domain=self.domain)
+        _lm = LM(self.rel)
+        _sub = _lm - self.rel.as_expr()
 
-        return SFFPoly(_poly, self.rel)
+        if self.degree(self.rel_var) < self.rel.degree(self.rel_var):
+            """ _rel doesn't devide _p """
+            return self
+        else:
+            return self._simple_reduce_rec(_lm, _sub)
 
+    def _simple_reduce_rec(self, lm, sub):
+        if self.degree(self.rel_var) == Poly(lm).degree(self.rel_var):
+            return SFFPoly(self.poly.subs({lm: sub}), self.rel, domain=self.domain)
+        else:
+            _p = self._simple_reduce_rec(lm * self.rel_var, sub * self.rel_var).poly.subs({lm: sub})
+            return SFFPoly(_p, self.rel, domain=self.domain)
