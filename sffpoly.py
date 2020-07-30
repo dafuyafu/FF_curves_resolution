@@ -44,10 +44,10 @@ class SFFPoly(Poly):
         Examples
         ========
 
-        >>> f = SFF(x + a * y, a ** 2 - 2, domain='FF(5)')
-        >>> g = SFF(x + 4 * a * y, a ** 2 - 2, domain='FF(5)')
+        >>> f = SFFPoly(x + a * y, a ** 2 - 2, domain='FF(5)')
+        >>> g = SFFPoly(x + 4 * a * y, a ** 2 - 2, domain='FF(5)')
         >>> f + g
-        SFF(2 * x, x, modulus=5)
+        SFFPoly(2 * x, x, modulus=5)
         """
         if f.domain != g.domain:
             raise ValueError("cannot add polynomials over different FFs")
@@ -64,10 +64,10 @@ class SFFPoly(Poly):
         Examples
         ========
 
-        >>> f = SFF(2 * x - a * y, a ** 2 - 2, domain='FF(5)')
-        >>> g = SFF(x + 4 * a * y, a ** 2 - 2, domain='FF(5)')
+        >>> f = SFFPoly(2 * x - a * y, a ** 2 - 2, domain='FF(5)')
+        >>> g = SFFPoly(x + 4 * a * y, a ** 2 - 2, domain='FF(5)')
         >>> f - g
-        SFF(x, x, a, modulus=5)
+        SFFPoly(x, x, a, modulus=5)
         """
         if f.domain != g.domain:
             raise ValueError("cannot add polynomials over different FFs")
@@ -107,9 +107,9 @@ class SFFPoly(Poly):
 
         Examples
         ========
-        >>> f = SFF(a ** 2 * x + a * y, a ** 2 - 2, domain='FF(5)')
+        >>> f = SFFPoly(a ** 2 * x + a * y, a ** 2 - 2, domain='FF(5)')
         >>> f._simple_reduce()
-        SFF(-2 * x + a * y, a ** 2 - 2, modulus=5)
+        SFFPoly(-2 * x + a * y, a ** 2 - 2, modulus=5)
         """
         if self.rel_var not in self.poly.gens:
             return self
