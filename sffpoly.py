@@ -20,10 +20,11 @@ class SFFPoly(Poly):
 
     def __new__(cls, rep, rel, *gens, **args):
         """Create a new polynomial instance via Poly.__new__()"""
-        if len(rel.gens) != 1:
-            raise ValueError("relational polynomial need to be monovariate")
+        # if len(rel.gens) != 1:
+            # raise ValueError("relational polynomial need to be monovariate")
         if LT(rel) != LM(rel):
             raise ValueError("relational polynomial need to be monic")
+
         return super().__new__(cls, rep, *gens, **args)
 
     def __init__(self, rep, rel, *gens, **args):
@@ -98,7 +99,10 @@ class SFFPoly(Poly):
             raise ValueError("cannot add polynomials over different SFFs")
 
     def reduce(self):
-        """Not implemented yet."""
+        """Not implemented yet"""
+
+    def simple_reduce(self):
+        return self._simple_reduce()
 
     def _simple_reduce(self):
         """
@@ -129,3 +133,21 @@ class SFFPoly(Poly):
         else:
             _p = self._simple_reduce_rec(lm * self.rel_var, sub * self.rel_var).poly.subs({lm: sub})
             return SFFPoly(_p, self.rel, domain=self.domain)
+
+class SFFElement:
+    pass
+
+class P2Point:
+    """
+    represents a point of P2 over finite field.
+    """
+
+    def __init__(self, a, b, c, rel):
+        if a == 0 and b == 0 and c == 0:
+            raise ValueError("(0,0,0) is not a PP2 point")
+        x,y,z = symbols('x,y,z')
+        self.coordinate = {x: a, y: b, z: c}
+        self.rel = rel
+
+    def __str__(self):
+        print(str(self.coordinate) + ' (rel: ' + str(self.rel) + ')')
