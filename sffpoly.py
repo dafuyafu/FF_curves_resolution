@@ -133,21 +133,3 @@ class SFFPoly(Poly):
         else:
             _p = self._simple_reduce_rec(lm * self.rel_var, sub * self.rel_var).poly.subs({lm: sub})
             return SFFPoly(_p, self.rel, domain=self.domain)
-
-class SFFElement:
-    pass
-
-class P2Point:
-    """
-    represents a point of P2 over finite field.
-    """
-
-    def __init__(self, a, b, c, rel):
-        if a == 0 and b == 0 and c == 0:
-            raise ValueError("(0,0,0) is not a PP2 point")
-        x,y,z = symbols('x,y,z')
-        self.coordinate = {x: a, y: b, z: c}
-        self.rel = rel
-
-    def __str__(self):
-        print(str(self.coordinate) + ' (rel: ' + str(self.rel) + ')')
