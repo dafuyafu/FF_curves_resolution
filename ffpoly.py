@@ -1,36 +1,72 @@
-from sympy.polys.polytools import poly, LM, LT
+from sympy.polys.polytools import Poly, poly, LM, LT
 from sympy.core.numbers import Integer
+from sympy.core.expr import Expr
 
 class SFF:
+    """
+        represents a splitted finite field of some polynomials over a finite field of which modulus is 'mod'.
+    """
+
     def __init__(self, rel, mod):
+        """
+
+        Instance variables:
+            * rel_list: list of relational equation of which element is a dict {'var': variable, 'rep': equation}
+            * mod: characteristic number
+
+        Example:
+            a_1 = symbols('a_1') 
+            rel = {'var': a_1, 'rep': a_1 ** 2 - 3, 'deg': 2}
+            rel_list = [rel, rel2, ...]
+
+        """
         if isinstance(rel, Expr):
-            self.rel = [rel]
+            self.rel_list = [{'var': poly(rel).gens[0], 'rep': rel, 'deg': poly(rel).degree()}]
         elif isinstance(rel, list):
-            self.rel = rel
+            self.rel_list = []
+            for _p in rel:
+                self.rel_list.append({'var': poly(_p).gens[0], 'rep': _p, 'deg': poly(rel).degree()})
         else: 
             raise ValueError("first argument needs to be an Expr instance or list.")
         self.mod = mod
 
     def as_FF(self):
-        """Not implemented yet"""
-        """output FF(n^r)"""
+        """ Not implemented yet """
+        """ output FF(n^r) """
+        raise NotImplementedError("unchi!")
 
     def as_sympy_FF(self):
         return "FF(" + str(self.mod) + ")"
 
     def as_SFF(self):
-        return "SFF(" + str(self.mod) + ") with " + str(self.rel)
+        return "SFF(" + str(self.mod) + ") with " + str(self.rel_list)
 
-    def rel_var(self)
-        _list = []
-        for _p in self.rel:
-            for _v in poly(_p).gens:
-                if not _v in _list:
-                    _list.append(_v)
-        return tuple(_list)
+    def ext_deg(self):
+        """ Not implemented yet """
+        raise NotImplementedError("unchi!")
 
-    def degree_rel(self, i):
-        return poly(self.rel[i]).degree()
+    def rel_deg(self, **args):
+        if not args:
+            return poly(self.rel_list[0]['rep']).degree()
+        elif 'var' in args:
+            for rel in self.rel_list:
+                if args['var'] == rel['var']:
+                    return poly(rel['rep']).degree()
+            raise ValueError("doesn't have the variable")
+        elif 'index' in args:
+            return poly(self.rel_list[args['index']]['rep']).degree()
+        else:
+            raise ValueError("rel_deg() doesn't the argument option")
+
+    def rel_append(self, rel):
+        """ Validations are not implemented. """
+        if isinstance(rel, Expr):
+            self.rel_list.append({'var': poly(rel).gens[0], 'rep': rel, 'deg': poly(rel).degree()})
+        elif isinstance(rel, list):
+            for _rel in rel:
+                self.rel_list.append({'var': poly(_rel).gens[0], 'rep': _rel, 'deg': poly(_rel).degree()})
+        else:
+            pass
 
 class FFPoly:
     """ 
@@ -58,17 +94,20 @@ class FFPoly:
             * dom: domain field which is a SFF instance
 
         """
-        self.rep = rep
+        if isinstance(rep, Poly):
+            self.rep = rep.as_expr()
+        else:
+            self.rep = rep
         self.dom = dom
-        self.var = poly(f).gens
+        self.var = poly(rep).gens
 
-        if isinstace(rep, Integer)
+        if isinstance(rep, Integer):
             self.is_int = True
         else:
             self.is_int = False
 
     def __str__(self):
-        print("FFPoly(" + str(self.rep) + ", modulus=" + str(self.dom.mod) + ", rel= " + str(self.dom.rel) + ")")
+        return "FFPoly(" + str(self.rep) + ", modulus=" + str(self.dom.mod) + ", rel: " + str(self.dom.rel_list) + ")"
 
     def as_expr(self):
         return self.rep
@@ -91,6 +130,10 @@ class FFPoly:
         else:
             raise ValueError("need only one or zero argument")
 
+    @classmethod
+    def ffpoly(rep, dom):
+        return FFPoly(rep, dom)
+
     def __add__(f,g):
         """
         Add two polynomials ``f`` and ``g``
@@ -105,7 +148,7 @@ class FFPoly:
         """
         if f.dom == g.dom:
             _add = f.as_poly() + g.as_poly()
-            return FFPoly(_add, f.dom)
+            return ffpoly(_add.as_expr(), f.dom)
         else:
             raise ValueError("cannot add polynomials over different FFs")
 
@@ -123,7 +166,7 @@ class FFPoly:
         """
         if f.dom == g.dom:
             _sub = f.as_poly() - g.as_poly()
-            return FFPoly(_sub, f.dom)
+            return ffpoly(_sub.as_expr(), f.dom)
         else:
             raise ValueError("cannot add polynomials over different FFs")
 
@@ -141,16 +184,20 @@ class FFPoly:
         """
         if f.dom == g.dom:
             _mul = f.poly * g.poly
-            return FFPoly(_mul, f.dom)._reduce()
+            return ffpoly(_mul.as_expr(), f.dom)._reduce()
         else:
-            raise ValueError("cannot add polynomials over different SFFs")
+            raise ValueError("cannot add polynomials over different FFs")
 
     def _reduce(self):
+        _ffpoly = self
+        for rel in self.dom.rel:
+            _ffpoly = _ffpoly._simple_reduce(rel)
+        return _ffpoly
 
-    def simple_reduce(self, var):
-        return self._simple_reduce(var)
+    def simple_reduce(self, rel):
+        return self._simple_reduce(rel)
 
-    def _simple_reduce(self, var):
+    def _simple_reduce(self, rel):
         """
         Divide f by its relation polynomial and calculate the residue
         when f.rel is monovariate i.e. considering over simple extention field.
@@ -161,34 +208,33 @@ class FFPoly:
         >>> f._simple_reduce()
         SFFPoly(-2 * x + a * y, a ** 2 - 2, modulus=5)
         """
+        _lm = LM(poly(rel['rep']))
+        _sub = _lm - rel['rep']
 
-        _lm = LM(poly(self.rel))
-        _sub = _lm - self.rel
-
-        if self.degree(var) < self.rel.degree(var):
+        if self.degree(rel['var']) < poly(rel['rep']).degree(rel['var']):
             """ _rel doesn't devide _p """
             return self
         else:
-            return self._simple_reduce_rec(_lm, _sub)
+            return self._simple_reduce_rec(_lm, _sub, rel['var'])
 
-    def _simple_reduce_rec(self, lm, sub):
-        if self.degree(self.rel_var) == Poly(lm).degree(self.rel_var):
-            return FFPoly(self.poly.subs({lm: sub}), self.rel, domain=self.domain)
+    def _simple_reduce_rec(self, lm, sub, var):
+        if self.degree(var) == poly(lm).degree(var):
+            return ffpoly(self.poly.subs({lm: sub}), dom=self.dom)
         else:
-            _p = self._simple_reduce_rec(lm * self.rel_var, sub * self.rel_var).poly.subs({lm: sub})
-            return FFPoly(_p, self.rel, domain=self.domain)
+            _p = self._simple_reduce_rec(lm * var, sub * var, var).rep.subs({lm: sub})
+            return ffpoly(_p, dom=self.dom)
 
 class P2Point:
     """
     represents a point of P2 over finite field.
     """
 
-    def __init__(self, a, b, c, rel):
+    def __init__(self, a, b, c, dom):
         if a == 0 and b == 0 and c == 0:
-            raise ValueError("(0,0,0) is not a PP2 point")
+            raise ValueError("(0,0,0) is not a P2 point")
         x,y,z = symbols('x,y,z')
         self.coordinate = {x: a, y: b, z: c}
-        self.rel = rel
+        self.dom = dom
 
     def __str__(self):
         print(str(self.coordinate) + ' (rel: ' + str(self.rel) + ')')

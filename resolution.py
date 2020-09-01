@@ -5,9 +5,10 @@
 
 '''
 
-from sympy.core import symbols
+from sympy.core import Expr, symbols
 from sympy.polys.polytools import poly, resultant, factor_list
-from sffpoly import SFFPoly, P2Point
+# from sffpoly import SFFPoly, P2Point
+from ffpoly import SFF, FFPoly, P2Point
 
 def find_sing(f):
 # 	if not isinstance(f, Poly):
