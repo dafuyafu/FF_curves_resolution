@@ -5,18 +5,22 @@
 
 '''
 
-from sympy.core import Expr, symbols
+from sympy.core.expr import Expr
+from sympy.core.symbol import symbols
 from sympy.polys.polytools import poly, resultant, factor_list
-# from sffpoly import SFFPoly, P2Point
 from ffpoly import SFF, FFPoly, P2Point
 
-def find_sing(f):
-# 	if not isinstance(f, Poly):
-# 		if isinstance(f, )
+def find_sing(f, **args):
 
-	# validates whether f in k[X,Y,Z]^h
+	""" validates whether f in k[X,Y,Z]^h """
 
-	var = symbols('x,y,z')
+	if not isinstance(f, Poly):
+		if not isinstance(f, Expr):
+			raise ValueError("Argument needs to be a Poly or Expr instance")
+		else:
+			f = poly(f)
+
+	var = symbols('x,y,z') # tuple
 	deg = f.degree()
 	sing = []
 	c = 0
@@ -28,9 +32,8 @@ def find_sing(f):
 			_f = _f.subs({u: u * v})
 		_f = quo(_f, v ** deg)
 		_var = var.remove(v)
-		_f = _wrap(_f,f)
-		p = [_wrap(resultant(_f, diff(_f, _var[0]), _var[1]), f), 
-			 _wrap(resultant(_f, diff(_f, _var[1]), _var[0]), f)]
+		p = [resultant(_f, diff(_f, _var[0]), _var[1]), 
+			 resultant(_f, diff(_f, _var[1]), _var[0])]
 		sol = []
 		'''
 			Assume that only one of p[0] and p[1] has nonrational points.
@@ -44,9 +47,6 @@ def find_sing(f):
 				_rel = radical(p[i]).as_expr().subs({var[i]: _rel_var})
 				sol.append([_rel_var, - _rel_var])
 		points = direct_product(sol[0], sol[1])
-		
-
-
 
 def _has_roots(f):
 	if not isinstance(f, Poly):
@@ -58,12 +58,6 @@ def _has_roots(f):
 		if f.subs({f.gens[0]: i}) == 0:
 			return True
 	return False
-
-def _wrap(ex, dom):
-	return poly(ex, domain=dom.domain)
-
-def _wrap_sff(ex, rel, dom):
-	return SFFPoly(ex, rel, domain=dom.domain)
 
 def radical(f):
 	factors = factor_list(f.as_expr(), modulus=f.get_modulus())

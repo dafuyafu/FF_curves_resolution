@@ -11,7 +11,8 @@ class SFF:
         """
 
         Instance variables:
-            * rel_list: list of relational equation of which element is a dict {'var': variable, 'rep': equation}
+            * rel_list: list of relational equations
+                        of which element is a dict {'var': variable, 'rep': equation}
             * mod: characteristic number
 
         Example:
@@ -29,6 +30,11 @@ class SFF:
         else: 
             raise ValueError("first argument needs to be an Expr instance or list.")
         self.mod = mod
+        _var_list = []
+        for _rel in self.rel_list:
+            if not _rel['var'] in _var_list:
+                _var_list.append(_rel['var'])
+        self.gens = _var_list
 
     def as_FF(self):
         """ Not implemented yet """
@@ -67,6 +73,13 @@ class SFF:
                 self.rel_list.append({'var': poly(_rel).gens[0], 'rep': _rel, 'deg': poly(_rel).degree()})
         else:
             pass
+
+    def point_list(self):
+        raise NotImplementedError()
+
+    def point(self, i):
+        
+
 
 class FFPoly:
     """ 
@@ -224,6 +237,13 @@ class FFPoly:
             _p = self._simple_reduce_rec(lm * var, sub * var, var).rep.subs({lm: sub})
             return ffpoly(_p, dom=self.dom)
 
+    def solve(self):
+
+
+    def solveabs(self):
+        """ solve self over its algebraic closure """
+        raise NotImplementedError
+
 class P2Point:
     """
     represents a point of P2 over finite field.
@@ -233,8 +253,14 @@ class P2Point:
         if a == 0 and b == 0 and c == 0:
             raise ValueError("(0,0,0) is not a P2 point")
         x,y,z = symbols('x,y,z')
-        self.coordinate = {x: a, y: b, z: c}
+        self.cod = {x: a, y: b, z: c}
         self.dom = dom
 
     def __str__(self):
-        print(str(self.coordinate) + ' (rel: ' + str(self.rel) + ')')
+        return str(self.coordinate) + ' (rel: ' + str(self.rel) + ')'
+
+    def __eq__(p, q):
+        if 
+
+
+
