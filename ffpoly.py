@@ -1,45 +1,74 @@
-from sympy.polys.polytools import Poly, poly, LM, LT
-from sympy.core.numbers import Integer
+from sympy.core.numbers import ilcm, Integer
 from sympy.core.expr import Expr
+from sympy.core.function import expand
+from sympy.ntheory.primetest import isprime
+from sympy.polys.polytools import Poly, poly, LM, LT
 
 class SFF:
     """
-        represents a splitted finite field of some polynomials over a finite field of which modulus is 'mod'.
+        represents a splitted finite field of some polynomials
+        over a finite field of which modulus is 'mod'.
     """
 
     def __init__(self, rel, mod):
         """
-
         Instance variables:
             * rel_list: list of relational equations
                         of which element is a dict {'var': variable, 'rep': equation}
             * mod: characteristic number
+            * var_list: list of variables of relational equations
+            * exdeg: extension degree
+            * num: number of elements
+            * gens: list of generators as vector space
 
         Example:
             a_1 = symbols('a_1') 
             rel = {'var': a_1, 'rep': a_1 ** 2 - 3, 'deg': 2}
             rel_list = [rel, rel2, ...]
-
         """
+        self.rel_list = []
         if isinstance(rel, Expr):
-            self.rel_list = [{'var': poly(rel).gens[0], 'rep': rel, 'deg': poly(rel).degree()}]
+            if len(poly(rel).gens) == 1:
+                self.rel_list.append({'var': poly(rel).gens[0], 'rep': rel, 'deg': poly(rel).degree(), 'uni': True})
+            else:
+                self.rel_list.append({'var': poly(rel).gens[0], 'rep': rel, 'deg': poly(rel).degree(), 'uni': False})
         elif isinstance(rel, list):
-            self.rel_list = []
             for _p in rel:
-                self.rel_list.append({'var': poly(_p).gens[0], 'rep': _p, 'deg': poly(rel).degree()})
+                if len(poly(_p).gens) == 1:
+                    self.rel_list.append({'var': poly(_p).gens[0], 'rep': _p, 'deg': poly(_p).degree(), 'uni': True})
+                else:
+                    self.rel_list.append({'var': poly(_p).gens[0], 'rep': _p, 'deg': poly(_p).degree(), 'uni': False})
         else: 
             raise ValueError("first argument needs to be an Expr instance or list.")
-        self.mod = mod
-        _var_list = []
+
+        if isprime(mod):
+            self.mod = mod
+        else:
+            raise ValueError("modulus needs to be a prime number")
+
+        _var_list, _degs, _gens = [], [], []
         for _rel in self.rel_list:
-            if not _rel['var'] in _var_list:
+            _degs.append(_rel['deg'])
+            if not _rel['var'] in _var_list and _rel['uni']:
                 _var_list.append(_rel['var'])
-        self.gens = _var_list
+        self.var_list = _var_list
+        self.exdeg = ilcm(1, *_degs)
+        self.num = mod ** self.exdeg
+
+        _expr = 1
+        for _var in self.var_list:
+            _deg = next(item for item in self.rel_list if item['var'] == _var and item['uni'])['deg']
+            _expr_1 = 0
+            for i in range(_deg):
+                _expr_1 += _var ** i
+            _expr *= _expr_1
+        _tuple = expand(_expr).as_coeff_add()
+        self.gens = tuple([_tuple[0]] + [item for item in _tuple[1]])
 
     def as_FF(self):
         """ Not implemented yet """
         """ output FF(n^r) """
-        raise NotImplementedError("unchi!")
+        raise NotImplementedError
 
     def as_sympy_FF(self):
         return "FF(" + str(self.mod) + ")"
@@ -49,7 +78,7 @@ class SFF:
 
     def ext_deg(self):
         """ Not implemented yet """
-        raise NotImplementedError("unchi!")
+        raise NotImplementedError
 
     def rel_deg(self, **args):
         if not args:
@@ -74,12 +103,17 @@ class SFF:
         else:
             pass
 
-    def point_list(self):
-        raise NotImplementedError()
+    def element(self, i):
+        if i > self.num:
+            raise ValueError
+        _rep = 0
+        for d in range(self.exdeg)[::-1]:
+            _rep += int(i / self.mod ** d) * self.gens[d]
+            i %= self.mod ** d
+        return _rep
 
-    def point(self, i):
-        
-
+    def elements(self):
+        return [self.element(i) for i in range(self.num)]
 
 class FFPoly:
     """ 
@@ -238,7 +272,7 @@ class FFPoly:
             return ffpoly(_p, dom=self.dom)
 
     def solve(self):
-
+        raise NotImplementedError
 
     def solveabs(self):
         """ solve self over its algebraic closure """
@@ -260,7 +294,7 @@ class P2Point:
         return str(self.coordinate) + ' (rel: ' + str(self.rel) + ')'
 
     def __eq__(p, q):
-        if 
+        raise NotImplementedError
 
 
 
