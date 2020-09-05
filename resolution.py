@@ -8,7 +8,7 @@
 from sympy.core.expr import Expr
 from sympy.core.symbol import symbols
 from sympy.polys.polytools import poly, resultant, factor_list
-from ffpoly import SFF, FFPoly, P2Point
+from sffpoly import SFF, FFPoly, P2Point
 
 def find_sing(f, **args):
 
