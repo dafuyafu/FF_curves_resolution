@@ -65,10 +65,3 @@ def radical(f):
 	for fac in factors[1]:
 		radical *= fac[0]
 	return _wrap(radical, f)
-
-def direct_product(list1, list2):
-	_list = []
-	for l1 in list1:
-		for l2 in list2:
-			_list.append((l1, l2))
-	return _list

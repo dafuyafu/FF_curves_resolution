@@ -43,12 +43,12 @@ class SFF:
                 self.rel_list.append({'var': poly(rel).gens[0],
                                       'rep': rel.as_expr(), 
                                       'deg': poly(rel).degree(), 
-                                      'uni': True})
+                                      'is_uni': True})
             else:
                 self.rel_list.append({'var': poly(rel).gens[0], 
                                       'rep': rel.as_expr(), 
                                       'deg': poly(rel).degree(), 
-                                      'uni': False})
+                                      'is_uni': False})
         elif isinstance(rel, list):
             for _p in rel:
                 if not LC(_p.as_poly()) == 1:
@@ -57,12 +57,12 @@ class SFF:
                     self.rel_list.append({'var': poly(_p).gens[0], 
                                           'rep': _p.as_expr(), 
                                           'deg': poly(_p).degree(), 
-                                          'uni': True})
+                                          'is_uni': True})
                 else:
                     self.rel_list.append({'var': poly(_p).gens[0], 
                                           'rep': _p.as_expr(), 
                                           'deg': poly(_p).degree(), 
-                                          'uni': False})
+                                          'is_uni': False})
         else: 
             raise ValueError("first argument needs to be an Expr instance or list.")
 
@@ -74,7 +74,7 @@ class SFF:
         _var_list, _degs, _gens = [], [], []
         for _rel in self.rel_list:
             _degs.append(_rel['deg'])
-            if not _rel['var'] in _var_list and _rel['uni']:
+            if not _rel['var'] in _var_list and _rel['is_uni']:
                 _var_list.append(_rel['var'])
         self.var_list = _var_list
         self.exdeg = ilcm(1, *_degs)
@@ -89,7 +89,7 @@ class SFF:
 
         _expr = 1
         for _var in self.var_list:
-            _deg = next(item for item in self.rel_list if item['var'] == _var and item['uni'])['deg']
+            _deg = next(item for item in self.rel_list if item['var'] == _var and item['is_uni'])['deg']
             _expr_1 = 0
             for i in range(_deg):
                 _expr_1 += _var ** i
@@ -108,19 +108,13 @@ class SFF:
         return FFPoly(cls, rel, mod)
 
     def as_FF(self):
-        """ Not implemented yet """
-        """ output FF(n^r) """
-        raise NotImplementedError
+        return "FF(%s ** %s)" % (self.mod, self.exdeg)
 
     def as_sympy_FF(self):
-        return "FF(" + str(self.mod) + ")"
+        return "FF(%s)" % self.mod
 
     def as_SFF(self):
-        return "SFF(" + str(self.mod) + ") with " + str(self.rel_list)
-
-    def ext_deg(self):
-        """ Not implemented yet """
-        raise NotImplementedError
+        return "SFF(%s ** %s) splitting %s" % (self.mod, self.exdeg, [rel['rep'] for rel in self.rel_list if rel['is_uni']])
 
     def rel_deg(self, **args):
         if not args:
@@ -309,18 +303,18 @@ class FFPoly:
 
     def subs_as_ffpoly(self, **args):
         return ffpoly(self.subs(args), self.dom)
-
-    def solve(self):
-        _sol = []
-        for point in product(self.dom.elements(), repeat=len(self.var)):
-            point_dict = dict((_var, point[self.var.index(_var)]) for _var in self.var)
-            if self.subs(point_dict) == 0:
-                _sol.append(point_dict)
-        return _sol
-
+        
     def solve_abs(self):
         """ solve self over its algebraic closure """
         raise NotImplementedError
+
+    def simple_solve(self):
+        _sol = []
+        for point in product(self.dom.element_itr(), repeat=len(self.var)):
+            point_dict = dict((_var, point[self.var.index(_var)]) for _var in self.var)
+            if reduce(self.subs(point_dict), self.dom) == 0:
+                _sol.append(point_dict)
+        return _sol
 
 class P2Point:
     """
@@ -340,18 +334,27 @@ class P2Point:
     def __eq__(p, q):
         raise NotImplementedError
 
+def sff(rep, mod):
+    """Constructor method for SFF"""
+    return SFF(rep, mod)
+
 def ffpoly(rep, dom):
+    """Constructor method for SFFPoly"""
     return FFPoly(rep, dom)
 
 def reduce(f, dom):
     if not isinstance(f, Expr):
         raise TypeError("reduce() argument must be an Expr object, not %s", type(f))
+    elif isinstance(f, Integer) or isinstance(f, int):
+        return f
     var = poly(f).gens
     for rel in dom.rel_list:
         if rel['rep'] == 0 or not rel['var'] in var:
             continue
         f = simple_reduce(f, rel)
-    return f
+    if isinstance(f, Integer) or isinstance(f, int):
+        return f % dom.mod
+    return poly(f, domain=dom.as_sympy_FF()).as_expr()
 
 def simple_reduce(f, rel):
     if not isinstance(f, Expr):
@@ -361,10 +364,24 @@ def simple_reduce(f, rel):
     if poly(f).degree(rel['var']) < poly(rel['rep']).degree(rel['var']):
         return f
     else:
-        return _simple_reduce(f, _lm, rel['rep'] - _lm, rel['var'])
+        return _simple_reduce(f, _lm, _lm - rel['rep'], rel['var'])
 
 def _simple_reduce(f, lm, sub, var):
     if poly(f).degree(var) == poly(lm).degree(var):
         return expand(f.subs({lm: sub}))
     else:
         return expand(_simple_reduce(f, lm * var, sub * var, var).subs({lm: sub}))
+
+def ff_solve(*polys):
+    if len(polys) == 0:
+        raise TypeError("solve() argument must be one or more ffpolys")
+    _vars = list(set(v for v in p.var for p in polys))
+    _mindeg = min(item.degree() for item in polys)
+
+    for p in polys:
+        if p == polys[0]:
+            continue
+        for q in _stack:
+            if not reduce(p.subs(q), polys[0].dom) == 0:
+                _sol.remove(q)
+    return _sol
