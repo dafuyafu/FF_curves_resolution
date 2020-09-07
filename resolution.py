@@ -8,9 +8,9 @@
 from sympy.core.expr import Expr
 from sympy.core.symbol import symbols
 from sympy.polys.polytools import poly, resultant, factor_list
-from sffpoly import SFF, FFPoly, P2Point
+from sffpoly import SFF, SFFPoly, P2Point
 
-def find_sing(f, **args):
+def sing(f, **args):
 
 	""" validates whether f in k[X,Y,Z]^h """
 

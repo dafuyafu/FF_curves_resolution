@@ -2,9 +2,9 @@ from itertools import product
 
 from sympy.core.numbers import ilcm, Integer
 from sympy.core.expr import Expr
-from sympy.core.function import expand
+from sympy.core.function import diff, expand
 from sympy.ntheory.primetest import isprime
-from sympy.polys.polytools import Poly, poly, LC
+from sympy.polys.polytools import factor_list, LC, Poly, poly, resultant
 
 class SFF:
     """
@@ -36,7 +36,10 @@ class SFF:
         """
         self.rel_list = []
         _dom = 'FF(' + str(mod) + ')'
-        if isinstance(rel, Expr):
+        if rel == 0:
+            self.is_prime = True
+        elif isinstance(rel, Expr):
+            self.is_prime = False
             if not LC(rel.as_poly()) == 1:
                 rel = poly(rel * pow(LC(rel.as_poly()), mod - 2, mod), domain=_dom).as_expr()
             if len(poly(rel).gens) == 1:
@@ -50,6 +53,12 @@ class SFF:
                                       'deg': poly(rel).degree(), 
                                       'is_uni': False})
         elif isinstance(rel, list):
+            self.is_prime = False
+            if rel == []:
+                self.rel_list.append({'var': 1, 
+                                      'rep': 0, 
+                                      'deg': "-oo", 
+                                      'is_uni': True})
             for _p in rel:
                 if not LC(_p.as_poly()) == 1:
                     _p = poly(_p * pow(LC(_p.as_poly()), mod - 2, mod), domain=_dom).as_expr()
@@ -64,38 +73,42 @@ class SFF:
                                           'deg': poly(_p).degree(), 
                                           'is_uni': False})
         else: 
-            raise ValueError("first argument needs to be an Expr instance or list.")
+            raise ValueError("first argument needs to be 0, an Expr instance or list.")
 
         if isprime(mod):
             self.mod = mod
         else:
             raise ValueError("modulus needs to be a prime number")
 
-        _var_list, _degs, _gens = [], [], []
-        for _rel in self.rel_list:
-            _degs.append(_rel['deg'])
-            if not _rel['var'] in _var_list and _rel['is_uni']:
-                _var_list.append(_rel['var'])
-        self.var_list = _var_list
-        self.exdeg = ilcm(1, *_degs)
-        self.num = mod ** self.exdeg
-
-        """
-            Note:
-            Below codes include errors.
-            When degree of two extension variables are each 2 and 4 then returns 8 generators,
-            however acutually there exist only 4 generators.
-        """
-
-        _expr = 1
-        for _var in self.var_list:
-            _deg = next(item for item in self.rel_list if item['var'] == _var and item['is_uni'])['deg']
-            _expr_1 = 0
-            for i in range(_deg):
-                _expr_1 += _var ** i
-            _expr *= _expr_1
-        _tuple = expand(_expr).as_coeff_add()
-        self.gens = tuple([_tuple[0]] + [item for item in _tuple[1]])        
+        if self.is_prime:
+            self.var_list = []
+            self.exdeg = 1
+            self.num = self.mod
+            self.gens = [1]
+        else:
+            _var_list, _degs, _gens = [], [], []
+            for _rel in self.rel_list:
+                _degs.append(_rel['deg'])
+                if not _rel['var'] in _var_list and _rel['is_uni']:
+                    _var_list.append(_rel['var'])
+            self.var_list = _var_list
+            self.exdeg = ilcm(1, *_degs)
+            self.num = mod ** self.exdeg
+            """
+                Note:
+                Below codes include errors.
+                When degree of two extension variables are each 2 and 4 then returns 8 generators,
+                however acutually there exist only 4 generators.
+            """
+            _expr = 1
+            for _var in self.var_list:
+                _deg = next(item for item in self.rel_list if item['var'] == _var and item['is_uni'])['deg']
+                _expr_1 = 0
+                for i in range(_deg):
+                    _expr_1 += _var ** i
+                _expr *= _expr_1
+            _tuple = expand(_expr).as_coeff_add()
+            self.gens = tuple([_tuple[0]] + [item for item in _tuple[1]])
 
     def __str__(self):
         return self.as_SFF()
@@ -114,7 +127,10 @@ class SFF:
         return "FF(%s)" % self.mod
 
     def as_SFF(self):
-        return "SFF(%s ** %s) splitting %s" % (self.mod, self.exdeg, [rel['rep'] for rel in self.rel_list if rel['is_uni']])
+        if self.is_prime:
+            return self.as_sympy_FF()
+        else:
+            return "SFF(%s ** %s) splitting %s" % (self.mod, self.exdeg, [rel['rep'] for rel in self.rel_list if rel['is_uni']])
 
     def rel_deg(self, **args):
         if not args:
@@ -127,7 +143,7 @@ class SFF:
         elif 'index' in args:
             return poly(self.rel_list[args['index']]['rep']).degree()
         else:
-            raise ValueError("rel_deg() doesn't the argument option")
+            raise ValueError("rel_deg() doesn't have the argument option")
 
     def rel_append(self, rel):
         """ Validations are not implemented. """
@@ -195,7 +211,7 @@ class SFFPoly:
             self.is_int = True
         else:
             self.rep = reduce(rep.as_expr(), dom)
-            self.var = poly(self.rep).gens
+            self.var = [v for v in poly(self.rep).gens if not v in dom.var_list] 
             self.is_int = False
         self.dom = dom
         if len(self.var) == 1:
@@ -204,28 +220,7 @@ class SFFPoly:
             self.is_uni = False
 
     def __repr__(self):
-        return "sffpoly(" + str(self.rep) + ", modulus=" + str(self.dom.mod) + ", rel: " + str(self.dom.rel_list) + ")"
-
-    def as_expr(self):
-        return self.rep
-
-    def as_poly(self):
-        if self.is_int:
-            raise ValueError("this is an integer.")
-        else:
-            return poly(self.rep, domain=self.as_sympy_FF)
-
-    def degree(self, *gens):
-        if self.rep == 0:
-            return "-oo"
-        elif self.is_int:
-            return 0
-        elif len(gens) == 0:
-            return poly(self.rep).degree()
-        elif len(gens) == 1:
-            return poly(self.rep).degree(gens[0])
-        else:
-            raise ValueError("need only one or zero argument")
+        return "SFFPoly(%s, %s)" % (self.rep, self.dom.as_SFF())
 
     def __add__(f,g):
         """
@@ -287,6 +282,27 @@ class SFFPoly:
         else:
             return False
 
+    def as_expr(self):
+        return self.rep
+
+    def as_poly(self):
+        if self.is_int:
+            raise ValueError("this is an integer.")
+        else:
+            return poly(self.rep, domain=self.as_sympy_FF)
+
+    def degree(self, *gens):
+        if self.rep == 0:
+            return "-oo"
+        elif self.is_int:
+            return 0
+        elif len(gens) == 0:
+            return poly(self.rep).degree()
+        elif len(gens) == 1:
+            return poly(self.rep).degree(gens[0])
+        else:
+            raise ValueError("need only one or zero argument")
+
     def subs(self, point):
         if self.is_int:
             raise TypeError("this is a modular integer")
@@ -312,20 +328,45 @@ class SFFPoly:
                 _sol.append(point_dict)
         return _sol
 
+    def diff(self, var):
+        return reduce(diff(self.rep, var, self.dom))
+
+    def sing(self):
+        """ find singular locus of self """
+        pass
+
 class P2Point:
     """
     represents a point of P2 over finite field.
     """
 
-    def __init__(self, a, b, c, dom):
-        if a == 0 and b == 0 and c == 0:
-            raise ValueError("(0,0,0) is not a P2 point")
+    def __init__(self, cod, dom):
         x,y,z = symbols('x y z')
-        self.cod = {x: a, y: b, z: c}
         self.dom = dom
+        if isinstance(cod, dict):
+            if cod == {}:
+                raise ValueError("need non empty dict argument")
+            elif cod[x] == 0 and cod[y] == 0 and cod[z] == 0:
+                raise ValueError("(0, 0, 0) is not a P2 point")
+            self.cod = {x: cod[x], y: cod[y], z: cod[z]}
+        elif isinstance(cod, list):
+            if len(cod) == 0:
+                raise ValueError("need non empty list")
+            elif cod == [0, 0, 0]:
+                raise ValueError("(0, 0, 0) is not a P2 point")
+            self.cod = {x: cod[0], y: cod[1], z: cod[2]}
+        elif isinstance(cod, tuple):
+            if len(cod) == 0:
+                raise ValueError("need non empty tuple")
+            elif cod == (0, 0, 0):
+                raise ValueError("(0, 0, 0) is not a P2 point")
+            self.cod = {x: cod[0], y: cod[1], z: cod[2]}
+
+    def __repr__(self):
+        return 'P2Point([%s: %s: %s], %s)' % (c for c in self.cod.values()) + (self.dom.as_SFF())
 
     def __str__(self):
-        return 'P2Point(' + str(self.cod) + ')'
+        return 'P2Point([%s: %s: %s], %s)' % (c for c in self.cod.values()) + (self.dom.as_SFF())
 
     def __eq__(p, q):
         raise NotImplementedError
@@ -335,8 +376,12 @@ def sff(rep, mod):
     return SFF(rep, mod)
 
 def sffpoly(rep, dom):
-    """Constructor method for Ssffpoly"""
+    """Constructor method for SFFPoly"""
     return SFFPoly(rep, dom)
+
+def p2point(cod, dom):
+    """Constructor method for SFFPoly"""
+    return P2Point(cod, dom)
 
 def reduce(f, dom):
     if not isinstance(f, Expr):
@@ -368,12 +413,13 @@ def _simple_reduce(f, lm, sub, var):
     else:
         return expand(_simple_reduce(f, lm * var, sub * var, var).subs({lm: sub}))
 
-def ff_solve(*polys):
+def ff_solve(polys):
     if len(polys) == 0:
         raise TypeError("solve() argument must be one or more sffpolys")
-    _vars = list(set(v for v in p.var for p in polys))
-    _mindeg = min(item.degree() for item in polys)
-
+    # _vars = list(set(_v for _v in _p.var for _p in polys))
+    # _mindeg = min(item.degree() for item in polys)
+    _stack = polys[0].simple_solve()
+    _sol = _stack
     for p in polys:
         if p == polys[0]:
             continue
