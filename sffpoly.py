@@ -54,24 +54,24 @@ class SFF:
                                       'is_uni': False})
         elif isinstance(rel, list):
             self.is_prime = False
-            if rel == []:
-                self.rel_list.append({'var': 1, 
-                                      'rep': 0, 
-                                      'deg': "-oo", 
-                                      'is_uni': True})
-            for _p in rel:
-                if not LC(_p.as_poly()) == 1:
-                    _p = poly(_p * pow(LC(_p.as_poly()), mod - 2, mod), domain=_dom).as_expr()
-                if len(poly(_p).gens) == 1:
-                    self.rel_list.append({'var': poly(_p).gens[0], 
-                                          'rep': _p.as_expr(), 
-                                          'deg': poly(_p).degree(), 
-                                          'is_uni': True})
-                else:
-                    self.rel_list.append({'var': poly(_p).gens[0], 
-                                          'rep': _p.as_expr(), 
-                                          'deg': poly(_p).degree(), 
-                                          'is_uni': False})
+            if rel == [] or rel == [0] * len(rel):
+                self.is_prime = True
+            else:
+                for _p in rel:
+                    if _p == 0:
+                        continue
+                    if not LC(_p.as_poly()) == 1:
+                        _p = poly(_p * pow(LC(_p.as_poly()), mod - 2, mod), domain=_dom).as_expr()
+                    if len(poly(_p).gens) == 1:
+                        self.rel_list.append({'var': poly(_p).gens[0], 
+                                              'rep': _p.as_expr(), 
+                                              'deg': poly(_p).degree(), 
+                                              'is_uni': True})
+                    else:
+                        self.rel_list.append({'var': poly(_p).gens[0], 
+                                              'rep': _p.as_expr(), 
+                                              'deg': poly(_p).degree(), 
+                                              'is_uni': False})
         else: 
             raise ValueError("first argument needs to be 0, an Expr instance or list.")
 
@@ -164,7 +164,10 @@ class SFF:
             raise ValueError
         _rep = 0
         for d in range(self.exdeg)[::-1]:
-            _rep += int(i / self.mod ** d) * self.gens[d]
+            c = int(i / self.mod ** d)
+            if c > self.mod / 2:
+                c -= self.mod
+            _rep += c * self.gens[d]
             i %= self.mod ** d
         return _rep
 
@@ -303,6 +306,9 @@ class SFFPoly:
         else:
             raise ValueError("need only one or zero argument")
 
+    def get_modulus(self):
+        return self.dom.mod
+
     def subs(self, point):
         if self.is_int:
             raise TypeError("this is a modular integer")
@@ -310,8 +316,8 @@ class SFFPoly:
             raise ValueError
         _rep = self.rep
         for k, v in point.items():
-            _rep = _rep.subs({k: v})
-        return _rep
+            _rep = expand(_rep.subs({k: v}))
+        return reduce(_rep, self.dom)
 
     def subs_as_sffpoly(self, **args):
         return sffpoly(self.subs(args), self.dom)
@@ -385,22 +391,30 @@ def p2point(cod, dom):
 
 def reduce(f, dom):
     if not isinstance(f, Expr):
-        raise TypeError("reduce() argument must be an Expr object, not %s", type(f))
+        raise TypeError("reduce() argument must be an integer or an Expr object, not %s", type(f))
     elif isinstance(f, Integer) or isinstance(f, int):
-        return f
+        f %= dom.mod
+        if f > dom.mod / 2:
+            return f - dom.mod
+        else:
+            return f
     var = poly(f).gens
     for rel in dom.rel_list:
         if rel['rep'] == 0 or not rel['var'] in var:
             continue
         f = simple_reduce(f, rel)
     if isinstance(f, Integer) or isinstance(f, int):
-        return f % dom.mod
-    return poly(f, domain=dom.as_sympy_FF()).as_expr()
+        f %= dom.mod
+        if f > dom.mod / 2:
+            return f - dom.mod
+        else:
+            return f
+    else:
+        return poly(f, domain=dom.as_sympy_FF()).as_expr()
 
 def simple_reduce(f, rel):
     if not isinstance(f, Expr):
-        raise TypeError("reduce() argument must be an Expr object, not %s", type(f))
-
+        raise TypeError("reduce() argument must be an integer or Expr object, not %s", type(f))
     _lm = rel['var'] ** rel['deg']
     if poly(f).degree(rel['var']) < poly(rel['rep']).degree(rel['var']):
         return f

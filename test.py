@@ -14,7 +14,7 @@ from sympy.polys.polytools import Poly, poly, resultant, factor_list
 from sffpoly import sff, sffpoly, ff_solve, reduce
 
 def sing(f):
-	x, y, a, b = symbols('x, y, a, b') # tuple
+	x, y, a, b = symbols('x y a b') # tuple
 	mod = f.get_modulus()
 	p = radical(resultant(f, diff(f, x), y), mod)
 	q = radical(resultant(f, diff(f, y), x), mod)
@@ -23,30 +23,40 @@ def sing(f):
 	if not _has_roots(p, x, mod):
 		_p = p.subs({x: a})
 		_list.append(_p)
+		_flag_p = True
 	else:
 		_p = 0
+		_flag_p = False
 	if not _has_roots(q, y, mod):
 		_q = q.subs({y: b})
 		_list.append(_q)
+		_flag_q = True
 	else:
 		_q = 0
+		_flag_q = False
 
 	_sff = sff(_list, mod)
 	_sff_p = sff(_p, mod)
 	_sff_q = sff(_q, mod)
-	_f = sffpoly(f, _sff)
-	_p = sffpoly(p, _sff_p)
-	_q = sffpoly(q, _sff_q)
-	_sol_p = _p.simple_solve()
-	_sol_q = _q.simple_solve()
+	f = sffpoly(f, _sff)
+	p = sffpoly(p, _sff_p)
+	q = sffpoly(q, _sff_q)
+
+	if _flag_p:
+		_sol_p = [{x: reduce(a ** (p.dom.mod ** e), _sff_p)} for e in range(p.degree())]
+	else:
+		_sol_p = [{x: n} for n in range(p.dom.mod) if p.subs({x: n}) == 0]
+	if _flag_q:
+		_sol_q = [{y: reduce(b ** (q.dom.mod ** e), _sff_q)} for e in range(q.degree())]
+	else:
+		_sol_q = [{y: n} for n in range(q.dom.mod) if q.subs({y: n}) == 0]
 	_sol = []
 
 	for point in product(_sol_p, _sol_q):
 		_point = {x: point[0][x], y: point[1][y]}
-		if reduce(_p.subs(_point), _sff) == 0 and reduce(_q.subs(_point), _sff) == 0:
+		if p.subs(_point) == 0 and q.subs(_point) == 0 and f.subs(_point) == 0:
 			_sol.append(_point)
 	return _sol, _sff.as_SFF()
-	
 
 def _has_roots(f, var, mod):
 	for i in range(mod):
