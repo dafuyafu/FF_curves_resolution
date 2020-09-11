@@ -399,6 +399,7 @@ def reduce(f, dom):
         else:
             return f
     var = poly(f).gens
+    f = expand(f)
     for rel in dom.rel_list:
         if rel['rep'] == 0 or not rel['var'] in var:
             continue
@@ -415,11 +416,11 @@ def reduce(f, dom):
 def simple_reduce(f, rel):
     if not isinstance(f, Expr):
         raise TypeError("reduce() argument must be an integer or Expr object, not %s", type(f))
-    _lm = rel['var'] ** rel['deg']
+    lm = rel['var'] ** rel['deg']
     if poly(f).degree(rel['var']) < poly(rel['rep']).degree(rel['var']):
-        return f
+        return expand(f)
     else:
-        return _simple_reduce(f, _lm, _lm - rel['rep'], rel['var'])
+        return _simple_reduce(f, lm, lm - rel['rep'], rel['var'])
 
 def _simple_reduce(f, lm, sub, var):
     if poly(f).degree(var) == poly(lm).degree(var):
