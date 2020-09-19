@@ -1,4 +1,5 @@
 from itertools import product
+from joblib import Parallel, delayed
 
 from sympy.core.numbers import ilcm, Integer
 from sympy.core.expr import Expr
@@ -121,7 +122,7 @@ class SFF:
         return sffpoly(cls, rel, mod)
 
     def as_FF(self):
-        return "FF(%s ** %s)" % (self.mod, self.exdeg)
+        return "FF(%s**%s)" % (self.mod, self.exdeg)
 
     def as_sympy_FF(self):
         return "FF(%s)" % self.mod
@@ -130,7 +131,7 @@ class SFF:
         if self.is_prime:
             return self.as_sympy_FF()
         else:
-            return "SFF(%s ** %s) splitting %s" % (self.mod, self.exdeg, [rel['rep'] for rel in self.rel_list if rel['is_uni']])
+            return "SFF(%s**%s) splitting %s" % (self.mod, self.exdeg, [rel['rep'] for rel in self.rel_list if rel['is_uni']])
 
     def rel_deg(self, **args):
         if not args:
@@ -171,12 +172,34 @@ class SFF:
             i %= self.mod ** d
         return _rep
 
-    def element_itr(self):
+    def element_iter(self):
         for i in range(self.num):
             yield self.element(i)
 
     def elements_list(self):
         return [self.element(i) for i in range(self.num)]
+
+    def point(self, n, i):
+        if i > self.num ** n:
+            raise ValueError
+        _list = []
+        for d in range(n)[::-1]:
+            _list.insert(0, self.element(int(i / (self.num ** d))))
+            i %= self.num ** d
+        return tuple(_list)
+
+    def point_as_dict(self, i, gens):
+        n = len(gens)
+        return dict((gens[d], self.point(n, i)[d]) for d in range(n))
+
+    def point_iter(self, n):
+        for i in range(self.num ** n):
+            yield self.point(n, i)
+
+    def point_as_dict_iter(self, gens):
+        n = len(gens)
+        for i in range(self.num ** n):
+            yield self.point_as_dict(i, gens)
 
 class SFFPoly:
     """ 
@@ -216,6 +239,7 @@ class SFFPoly:
             self.rep = reduce(rep.as_expr(), dom)
             self.var = [v for v in poly(self.rep).gens if not v in dom.var_list] 
             self.is_int = False
+
         self.dom = dom
         if len(self.var) == 1:
             self.is_uni = True
@@ -238,7 +262,7 @@ class SFFPoly:
         Ssffpoly(2 * x, x, modulus=5)
         """
         if f.dom == g.dom:
-            _add = poly(reduce(expand(f.rep + g.rep), f.dom), domain=f.dom.as_sympy_FF()).as_expr()
+            _add = reduce(f.rep + g.rep, f.dom)
             return sffpoly(_add, f.dom)
         else:
             raise ValueError("argument sffpolys have different domains")
@@ -256,7 +280,7 @@ class SFFPoly:
         Ssffpoly(x, x, a, modulus=5)
         """
         if f.dom == g.dom:
-            _sub = poly(reduce(expand(f.rep - g.rep), f.dom), domain=f.dom.as_sympy_FF()).as_expr()
+            _sub = reduce(f.rep - g.rep, f.dom)
             return sffpoly(_sub, f.dom)
         else:
             raise ValueError("argument sffpolys have different domains")
@@ -274,10 +298,29 @@ class SFFPoly:
         Ssffpoly(x ** 2 + 2 * a * x * y - y ** 2, x, modulus=5)
         """
         if f.dom == g.dom:
-            _mul = poly(reduce(expand(f.rep * g.rep), f.dom), domain=f.dom.as_sympy_FF()).as_expr()
+            _mul = reduce(f.rep * g.rep, f.dom)
             return sffpoly(_mul, f.dom)
         else:
             raise ValueError("argument sffpolys have different domains")
+
+    def __pow__(f, e):
+        if not isinstance(e, int) and not isinstance(e, Integer):
+            raise TypeError("second argument needs to be an integer, not %s" % e.__class__.__name__)
+        if f.is_int:
+            return f ** e
+        if e < 0:
+            e = f.dom.num - e
+        if e < f.dom.mod or e < 100:
+            return sffpoly(_pow(f, e), f.dom)
+        else:
+            length = int(e / 100)
+            index_ = [100 for i in range(length - 1)]
+            index_.append(e - (length - 1)*length)
+            result = Parallel(n_jobs=-1)([delayed(_pow)(f, i) for i in index_])
+            pow_ = 1
+            for r in result:
+                pow_ = reduce(pow_ * r, f.dom)
+            return sffpoly(pow_, f.dom)
 
     def __eq__(f,g):
         if f.dom == g.dom and f.rep == g.rep:
@@ -310,6 +353,9 @@ class SFFPoly:
         return self.dom.mod
 
     def subs(self, point):
+        """
+        substitute points to its variables
+        """
         if self.is_int:
             raise TypeError("this is a modular integer")
         if point == {}:
@@ -326,13 +372,19 @@ class SFFPoly:
         """ solve self over its algebraic closure """
         raise NotImplementedError
 
-    def simple_solve(self):
+    def solve(self):
         _sol = []
-        for point in product(self.dom.element_itr(), repeat=len(self.var)):
-            point_dict = dict((_var, point[self.var.index(_var)]) for _var in self.var)
-            if reduce(self.subs(point_dict), self.dom) == 0:
-                _sol.append(point_dict)
+        for point in self.dom.point_as_dict_iter(self.var):
+            if self.subs(point) == 0:
+                _sol.append(point)
+        # for point in product(self.dom.element_itr(), repeat=len(self.var)):
+        #     point_dict = dict((_var, point[self.var.index(_var)]) for _var in self.var)
+        #     if self.subs(point_dict) == 0:
+        #         _sol.append(point_dict)
         return _sol
+
+    # def solve_pal(self):
+    #     _sol = []
 
     def diff(self, var):
         return reduce(diff(self.rep, var, self.dom))
@@ -340,6 +392,9 @@ class SFFPoly:
     def sing(self):
         """ find singular locus of self """
         pass
+
+    def reduce(self):
+        self.rep = reduce(self.rep, self.dom)
 
 class P2Point:
     """
@@ -391,31 +446,32 @@ def p2point(cod, dom):
 
 def reduce(f, dom):
     if not isinstance(f, Expr):
-        raise TypeError("reduce() argument must be an integer or an Expr object, not %s", type(f))
+        raise TypeError("reduce() argument must be an integer or an Expr object, not %s" % f.__class__.__name__)
     elif isinstance(f, Integer) or isinstance(f, int):
         f %= dom.mod
         if f > dom.mod / 2:
             return f - dom.mod
         else:
             return f
-    var = poly(f).gens
-    f = expand(f)
-    for rel in dom.rel_list:
-        if rel['rep'] == 0 or not rel['var'] in var:
-            continue
-        f = simple_reduce(f, rel)
-    if isinstance(f, Integer) or isinstance(f, int):
-        f %= dom.mod
-        if f > dom.mod / 2:
-            return f - dom.mod
-        else:
-            return f
     else:
-        return poly(f, domain=dom.as_sympy_FF()).as_expr()
+        var = poly(f).gens
+        f = expand(f)
+        for rel in dom.rel_list:
+            if rel['rep'] == 0 or not rel['var'] in var:
+                continue
+            f = simple_reduce(f, rel)
+        if isinstance(f, Integer) or isinstance(f, int):
+            f %= dom.mod
+            if f > dom.mod / 2:
+                return f - dom.mod
+            else:
+                return f
+        else:
+            return poly(f, domain=dom.as_sympy_FF()).as_expr()
 
 def simple_reduce(f, rel):
     if not isinstance(f, Expr):
-        raise TypeError("reduce() argument must be an integer or Expr object, not %s", type(f))
+        raise TypeError("reduce() argument must be an integer or Expr object, not %s" % f.__class__.__name__)
     lm = rel['var'] ** rel['deg']
     if poly(f).degree(rel['var']) < poly(rel['rep']).degree(rel['var']):
         return expand(f)
@@ -442,3 +498,9 @@ def ff_solve(polys):
             if not reduce(p.subs(q), polys[0].dom) == 0:
                 _sol.remove(q)
     return _sol
+
+def _pow(f, e):
+    pow_ = 1
+    for i in range(e):
+        pow_ = reduce(pow_ * f.rep, f.dom)
+    return pow_

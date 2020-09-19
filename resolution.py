@@ -14,12 +14,21 @@ from sympy.polys.polytools import Poly, poly, resultant, factor_list
 from sffpoly import sff, sffpoly, ff_solve, reduce
 
 def sing(f):
-	x, y, a, b = symbols('x y a b') # tuple
+	if not isinstance(f, Poly):
+		if isinstance(f, SFFPoly):
+			f = poly(f.rep, domain=f.as_sympy_FF())
+		else:
+			raise TypeError("argument must be a Poly or SFFPoly object, not %s" % f.__class__.__name__)
+	x, y = symbols('x y') # tuple
 	mod = f.get_modulus()
-	p = radical(resultant(f, diff(f, x), y), mod)
-	q = radical(resultant(f, diff(f, y), x), mod)
+	p = factor_list(resultant(f, diff(f, x), y), modulus=mod)
+	q = factor_list(resultant(f, diff(f, y), x), modulus=mod)
 	_list = []
 
+	for _p in p[1]:
+		if _has_roots(_p[0], x, mod):
+			pass
+		
 	if not _has_roots(p, x, mod):
 		_p = p.subs({x: a})
 		_list.append(_p)
