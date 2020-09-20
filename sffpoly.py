@@ -261,6 +261,8 @@ class SFFPoly:
         >>> f + g
         Ssffpoly(2 * x, x, modulus=5)
         """
+        if not isinstance(f, SFFPoly) or not isinstance(g, SFFPoly):
+            raise TypeError("cannot add %s and %s" % (f.__class__.__name__, g.__class__.__name__))
         if f.dom == g.dom:
             _add = reduce(f.rep + g.rep, f.dom)
             return sffpoly(_add, f.dom)
@@ -279,6 +281,8 @@ class SFFPoly:
         >>> f - g
         Ssffpoly(x, x, a, modulus=5)
         """
+        if not isinstance(f, SFFPoly) or not isinstance(g, SFFPoly):
+            raise TypeError("cannot subtract %s and %s" % (f.__class__.__name__, g.__class__.__name__))
         if f.dom == g.dom:
             _sub = reduce(f.rep - g.rep, f.dom)
             return sffpoly(_sub, f.dom)
@@ -297,6 +301,8 @@ class SFFPoly:
         >>> f * g
         Ssffpoly(x ** 2 + 2 * a * x * y - y ** 2, x, modulus=5)
         """
+        if not isinstance(f, SFFPoly) or not isinstance(g, SFFPoly):
+            raise TypeError("cannot multiple %s and %s" % (f.__class__.__name__, g.__class__.__name__))
         if f.dom == g.dom:
             _mul = reduce(f.rep * g.rep, f.dom)
             return sffpoly(_mul, f.dom)
@@ -304,23 +310,22 @@ class SFFPoly:
             raise ValueError("argument sffpolys have different domains")
 
     def __pow__(f, e):
+        if not isinstance(f, SFFPoly):
+            raise TypeError("cannot calculate the power of %s" % f.__class__.__name__)
         if not isinstance(e, int) and not isinstance(e, Integer):
             raise TypeError("second argument needs to be an integer, not %s" % e.__class__.__name__)
         if f.is_int:
             return f ** e
         if e < 0:
             e = f.dom.num - e
-        if e < f.dom.mod or e < 100:
-            return sffpoly(_pow(f, e), f.dom)
-        else:
-            length = int(e / 100)
-            index_ = [100 for i in range(length - 1)]
-            index_.append(e - (length - 1)*length)
-            result = Parallel(n_jobs=-1)([delayed(_pow)(f, i) for i in index_])
-            pow_ = 1
-            for r in result:
-                pow_ = reduce(pow_ * r, f.dom)
-            return sffpoly(pow_, f.dom)
+        num_ = bin(e).replace('0b','')
+        len_ = len(num_)
+        list_ = [len_ - d - 1 for d in range(len_) if num_[d] == '1']
+        result = Parallel(n_jobs=-1)([delayed(_pow_self)(f, n) for n in list_])
+        pow_ = 1
+        for r in result:
+            pow_ = reduce(pow_ * r, f.dom)
+        return sffpoly(pow_, f.dom)
 
     def __eq__(f,g):
         if f.dom == g.dom and f.rep == g.rep:
@@ -499,8 +504,8 @@ def ff_solve(polys):
                 _sol.remove(q)
     return _sol
 
-def _pow(f, e):
-    pow_ = 1
-    for i in range(e):
-        pow_ = reduce(pow_ * f.rep, f.dom)
+def _pow_self(f, n):
+    pow_ = f.rep
+    for i in range(n):
+        pow_ = reduce(pow_ * pow_, f.dom)
     return pow_
