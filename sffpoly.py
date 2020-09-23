@@ -1,5 +1,7 @@
 from itertools import product
-from joblib import Parallel, delayed
+from multiprocessing import Process, Pool, Queue
+from multiprocessingtools import sffprocess
+import os
 
 from sympy.core.numbers import ilcm, Integer
 from sympy.core.expr import Expr
@@ -146,26 +148,12 @@ class SFF:
         else:
             raise ValueError("rel_deg() doesn't have the argument option")
 
-    def rel_append(self, rel):
-        """ Validations are not implemented. """
-        """ 
-            CAUTION!!
-            DO NOT USE THIS METHOD
-        """
-        if isinstance(rel, Expr):
-            self.rel_list.append({'var': poly(rel).gens[0], 'rep': rel, 'deg': poly(rel).degree()})
-        elif isinstance(rel, list):
-            for _rel in rel:
-                self.rel_list.append({'var': poly(_rel).gens[0], 'rep': _rel, 'deg': poly(_rel).degree()})
-        else:
-            pass
-
     def element(self, i):
         if i > self.num:
             raise ValueError
         _rep = 0
         for d in range(self.exdeg)[::-1]:
-            c = int(i / self.mod ** d)
+            c = i // (self.mod ** d)
             if c > self.mod / 2:
                 c -= self.mod
             _rep += c * self.gens[d]
@@ -231,7 +219,7 @@ class SFFPoly:
 
         """
         
-        if isinstance(rep, Integer):
+        if isinstance(rep, Integer) or isinstance(rep, int):
             self.rep = rep
             self.var = []
             self.is_int = True
@@ -241,9 +229,14 @@ class SFFPoly:
             self.is_int = False
 
         self.dom = dom
-        if len(self.var) == 1:
+        if len(self.var) == 0:
+            self.is_const = True
+            self.is_uni = False
+        elif len(self.var) == 1:
+            self.is_const = False
             self.is_uni = True
         else:
+            self.is_const = False
             self.is_uni = False
 
     def __repr__(self):
@@ -317,18 +310,35 @@ class SFFPoly:
         if f.is_int:
             return f ** e
         if e < 0:
-            e = f.dom.num - e
+            e = f.dom.num + e - 1
+        if e == 0:
+            return sffpoly(1, f.dom)
+        if e == 1:
+            return f
         num_ = bin(e).replace('0b','')
         len_ = len(num_)
-        list_ = [len_ - d - 1 for d in range(len_) if num_[d] == '1']
-        result = Parallel(n_jobs=-1)([delayed(_pow_self)(f, n) for n in list_])
+        list_ = [(f, len_ - d - 1) for d in range(len_) if num_[d] == '1']
+        with Pool(os.cpu_count()) as p:
+            result = p.starmap(_pow_self, list_)
         pow_ = 1
         for r in result:
             pow_ = reduce(pow_ * r, f.dom)
         return sffpoly(pow_, f.dom)
 
     def __eq__(f,g):
-        if f.dom == g.dom and f.rep == g.rep:
+        if isinstance(f, SFFPoly):
+            f_ = f.rep
+        elif isinstance(f, Poly):
+            f_ = f.as_expr()
+        else:
+            f_ = f
+        if isinstance(g, SFFPoly):
+            g_ = g.rep
+        elif isinstance(g, Poly):
+            g_ = g.as_expr()
+        else:
+            g_ = g
+        if f_ == g_:
             return True
         else:
             return False
@@ -390,6 +400,29 @@ class SFFPoly:
 
     # def solve_pal(self):
     #     _sol = []
+
+    def is_primitive(self):
+        if not self.is_const:
+            raise TypeError("This is not constant element.")
+        num_ = (self.dom.num - 1) // 2
+        if not self ** num_ == -1:
+            return False
+        count = os.cpu_count()
+        p = sffprocess(_is_primitive, (self, num_), processes=count)
+        p.start()
+        while(1):
+            b = p.queue.get()
+            if not b:
+                p.terminate()
+                return False
+            elif b and count == 1:
+                break
+            else:
+                count -= 1
+        p.join()
+        p.close()
+        return True
+
 
     def diff(self, var):
         return reduce(diff(self.rep, var, self.dom))
@@ -454,7 +487,7 @@ def reduce(f, dom):
         raise TypeError("reduce() argument must be an integer or an Expr object, not %s" % f.__class__.__name__)
     elif isinstance(f, Integer) or isinstance(f, int):
         f %= dom.mod
-        if f > dom.mod / 2:
+        if f > dom.mod // 2:
             return f - dom.mod
         else:
             return f
@@ -467,7 +500,7 @@ def reduce(f, dom):
             f = simple_reduce(f, rel)
         if isinstance(f, Integer) or isinstance(f, int):
             f %= dom.mod
-            if f > dom.mod / 2:
+            if f > dom.mod // 2:
                 return f - dom.mod
             else:
                 return f
@@ -509,3 +542,14 @@ def _pow_self(f, n):
     for i in range(n):
         pow_ = reduce(pow_ * pow_, f.dom)
     return pow_
+
+def _is_primitive(f, m, d, q, p):
+    for i in range((m * d) // p, (m * (d + 1)) // p):
+        if i == 0 or i == m - 1:
+            continue
+        if f ** i == 1:
+            q.put(False)
+            break
+        else:
+            pass
+    q.put(True)
