@@ -1,27 +1,33 @@
-from multiprocessing import Process, Queue
+'''
+	https://stackoverflow.com/questions/6974695/python-process-pool-non-daemonic
+	recently accessed: 20200923
+'''
 
-class SFFProcess():
-	def __init__(self, target, args, processes=8):
-		self.queue = Queue()
-		self.p_list = [Process(target=target, args=args+(d, self.queue, processes)) for d in range(processes)]
+import multiprocessing
+import multiprocessing.pool
 
-	def start(self):
-		for p in self.p_list:
-			p.start()
+class NoDaemonProcess(multiprocessing.Process):
+	def _get_daemon(self):
+		return False
+	def _set_daemon(self, value):
+		pass
+	daemon = property(_get_daemon, _set_daemon)
 
-	def terminate(self):
-		for p in self.p_list:
-			if p.is_alive():
-				p.terminate()
+class SFFPool(multiprocessing.pool.Pool):
+	Process = NoDaemonProcess
 
-	def join(self):
-		for p in self.p_list:
-			p.join()
+# def test():
+#     print("Creating 5 (non-daemon) workers and jobs in main process.")
+#     pool = MyPool(5)
 
-	def close(self):
-		self.join()
-		for p in self.p_list:
-			p.close()
+#     result = pool.map(work, [randint(1, 5) for x in range(5)])
 
-def sffprocess(target, args, processes=8):
-	return SFFProcess(target, args, processes)
+#     pool.close()
+#     pool.join()
+#     print(result)
+
+# if __name__ == '__main__':
+#     test()
+
+class StopEval(Exception):
+	pass

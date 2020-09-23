@@ -1,6 +1,6 @@
 from itertools import product
 from multiprocessing import Process, Pool, Queue
-from multiprocessingtools import sffprocess
+from multiprocessingtools import SFFPool, StopEval
 import os
 
 from sympy.core.numbers import ilcm, Integer
@@ -160,7 +160,7 @@ class SFF:
             i %= self.mod ** d
         return _rep
 
-    def element_iter(self):
+    def elements_iter(self):
         for i in range(self.num):
             yield self.element(i)
 
@@ -188,6 +188,13 @@ class SFF:
         n = len(gens)
         for i in range(self.num ** n):
             yield self.point_as_dict(i, gens)
+
+    def primitive_elements(self):
+        result = []
+        for e in self.elements_iter():
+            if sffpoly(e, self).is_primitive():
+                result.append(e)
+        return result
 
 class SFFPoly:
     """ 
@@ -308,7 +315,7 @@ class SFFPoly:
         if not isinstance(e, int) and not isinstance(e, Integer):
             raise TypeError("second argument needs to be an integer, not %s" % e.__class__.__name__)
         if f.is_int:
-            return f ** e
+            return sffpoly(f.rep ** e, f.dom)
         if e < 0:
             e = f.dom.num + e - 1
         if e == 0:
@@ -408,21 +415,34 @@ class SFFPoly:
         if not self ** num_ == -1:
             return False
         count = os.cpu_count()
-        p = sffprocess(_is_primitive, (self, num_), processes=count)
-        p.start()
-        while(1):
-            b = p.queue.get()
-            if not b:
-                p.terminate()
+        # p = sffprocess(_is_primitive, (self, num_), processes=count)
+        # p.start()
+        # while(1):
+        #     b = p.queue.get()
+        #     if not b:
+        #         p.terminate()
+        #         return False
+        #     elif b and count == 1:
+        #         break
+        #     else:
+        #         count -= 1
+        # p.join()
+        # p.close()
+        # return True
+        with SFFPool(count) as p:
+            try:
+                p.starmap_async(_is_primitive, self.with_count_iter(num_)).get()
+            except StopEval:
+                p.close()
                 return False
-            elif b and count == 1:
-                break
-            else:
-                count -= 1
-        p.join()
-        p.close()
         return True
 
+    def is_const(self):
+        return self.is_const
+
+    def with_count_iter(self, m):
+        for i in range(m):
+            yield (self, i)
 
     def diff(self, var):
         return reduce(diff(self.rep, var, self.dom))
@@ -543,13 +563,19 @@ def _pow_self(f, n):
         pow_ = reduce(pow_ * pow_, f.dom)
     return pow_
 
-def _is_primitive(f, m, d, q, p):
-    for i in range((m * d) // p, (m * (d + 1)) // p):
-        if i == 0 or i == m - 1:
-            continue
-        if f ** i == 1:
-            q.put(False)
-            break
-        else:
-            pass
-    q.put(True)
+# def _is_primitive(f, m, d, q, p):
+#     for i in range((m * d) // p, (m * (d + 1)) // p):
+#         if i == 0 or i == m - 1:
+#             continue
+#         if f ** i == 1:
+#             q.put(False)
+#             break
+#         else:
+#             pass
+#     q.put(True)
+
+def _is_primitive(f, i):
+    if f ** i == -1:
+        raise StopEval()
+    else:
+        pass
