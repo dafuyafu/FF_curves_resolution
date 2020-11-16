@@ -1,5 +1,5 @@
 from itertools import product
-from multiprocessing import Pool, Queue
+from multiprocessing import Pool, Queue, Manager
 from queue import Empty
 import os
 
@@ -207,14 +207,20 @@ class SFFPoly:
         raise NotImplementedError
 
     def solve(self):
+        # _sol = []
+        # for point in self.dom.points_as_dict_iter(self.var):
+        #     if self.subs(point) == 0:
+        #         _sol.append(point)
+        # return _sol
         _sol = []
-        for point in self.dom.point_as_dict_iter(self.var):
-            if self.subs(point) == 0:
-                _sol.append(point)
-        # for point in product(self.dom.element_itr(), repeat=len(self.var)):
-        #     point_dict = dict((_var, point[self.var.index(_var)]) for _var in self.var)
-        #     if self.subs(point_dict) == 0:
-        #         _sol.append(point_dict)
+        m = Manager()
+        q = m.Queue()
+        with Pool(os.cpu_count()) as p:
+        	p.starmap_async(_eval_solve, self.dom.points_as_dict_with_poly_and_queue_iter(self.var, self, q))
+        	if q.qsize == self.degree():
+        		p.terminate()
+        while not q.empty():
+        	_sol.append(q.get())
         return _sol
 
     def is_primitive():
@@ -351,6 +357,10 @@ def ff_solve(polys):
             if not reduce(p.subs(q), polys[0].dom) == 0:
                 _sol.remove(q)
     return _sol
+
+def _eval_solve(f, p, q):
+	if f.subs(p) == 0:
+		q.put(p)
 
 def _pow_self(f, n):
     pow_ = f.rep

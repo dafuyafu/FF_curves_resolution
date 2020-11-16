@@ -5,6 +5,7 @@
 
 '''
 from itertools import product
+import time
 
 from sympy.core.expr import Expr
 from sympy.core.function import diff
@@ -15,6 +16,7 @@ from sffpolytools import sffpoly, reduce
 from sffdomains import sff
 
 def sing(f):
+	start = time.time()
 	if not isinstance(f, Poly):
 		if isinstance(f, SFFPoly):
 			f = poly(f.rep, domain=f.as_sympy_FF())
@@ -67,6 +69,9 @@ def sing(f):
 		point_ = {x: point[0][x], y: point[1][y]}
 		if f_x.subs(point_) == 0 and f_y.subs(point_) == 0 and f.subs(point_) == 0:
 			sol_f.append(point_)
+
+	elapsed_time = time.time() - start
+	print("elapsed_time:{0}".format(elapsed_time) + "[sec]")
 	return sol_f, sff_.as_SFF()
 
 def sing_apart(f):

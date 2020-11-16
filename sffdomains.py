@@ -184,5 +184,10 @@ class SFF:
         for i in range(self.num ** n):
             yield self.point_as_dict(i, gens)
 
+    def points_as_dict_with_poly_and_queue_iter(self, gens, poly, queue):
+        n = len(gens)
+        for i in range(self.num ** n):
+            yield (poly, self.point_as_dict(i, gens), queue)
+
 def sff(rel, mod):
     return SFF(rel, mod)
