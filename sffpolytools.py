@@ -8,7 +8,7 @@ from sympy.core.expr import Expr
 from sympy.core.function import diff, expand
 from sympy.core.symbol import symbols
 from sympy.ntheory.primetest import isprime
-from sympy.polys.polytools import factor_list, LC, Poly, poly, resultant
+from sympy.polys.polytools import factor_list, LC, LT, Poly, poly, resultant
 
 from sffdomains import sff, SFF
 from multiprocessingtools import SFFPool, StopEval
@@ -118,16 +118,46 @@ class SFFPoly:
         >>> f * g
         Ssffpoly(x ** 2 + 2 * a * x * y - y ** 2, x, modulus=5)
         """
-        if not isinstance(f, SFFPoly) or not isinstance(g, SFFPoly):
-            raise TypeError("cannot multiple %s and %s" % (f.__class__.__name__, g.__class__.__name__))
-        if f.dom == g.dom:
-            _mul = reduce(f.rep * g.rep, f.dom)
-            return sffpoly(_mul, f.dom)
+        if isinstance(g, int) or isinstance(g, Integer):
+        	return sffpoly(f.rep * g, f.dom)
+        if isinstance(g, SFFPoly):
+	        if f.dom == g.dom:
+	            _mul = reduce(f.rep * g.rep, f.dom)
+	            return sffpoly(_mul, f.dom)
+	        else:
+	            raise ValueError("argument sffpolys have different domains")
         else:
-            raise ValueError("argument sffpolys have different domains")
+        	raise TypeError("cannot multiple %s and %s" % (f.__class__.__name__, g.__class__.__name__))
 
-    def __truediv__(f,g):
+    def __truediv__(f, g):
         raise TypeError("cannot divide f by g")
+
+    def __floordiv__(f, g):
+    	if f.is_const:
+    		return g * f ** (f.dom.num - 2)
+    	if g.is_const:
+    		return f * g ** (f.dom.num - 2)
+    	if not f.is_uni or not g.is_uni:
+    		raise TypeError("cannot divide multivariate polynomial(s)")
+    	if not f.var[0] == g.var[0]:
+    		raise ValueError("cannot divide polynomials which have different variables")
+    	if f.degree() < g.degree():
+    		return sffgen(0, f.dom)
+    	_var = f.var[0]
+    	_div = sffpoly(0, f.dom)
+    	while f.degree() >= g.degree():
+    		lt_f = sffconst(lc(f, _var), f.dom)
+    		lt_g = sffconst(lc(g, _var), f.dom)
+    		_term = (lt_f / lt_g).rep * _var ** (f.degree() - g.degree())
+    		_div += sffpoly(_term, f.dom)
+    		_mul = reduce(_term * g.rep, f.dom)
+    		f -= sffpoly(_mul, f.dom)
+    		if f.rep == 0:
+    			break
+    	return _div
+
+    def __mod__(f, g):
+    	return f - (f // g) * g
 
     def __pow__(f, e):
         if not isinstance(e, int) and not isinstance(e, Integer):
@@ -169,7 +199,7 @@ class SFFPoly:
         if self.is_int:
             raise ValueError("this is an integer.")
         else:
-            return poly(self.rep, domain=self.as_sympy_FF)
+            return poly(self.rep, domain=self.dom.as_sympy_FF())
 
     def degree(self, *gens):
         if self.rep == 0:
@@ -239,9 +269,20 @@ class SFFPoly:
     def reduce(self):
         self.rep = reduce(self.rep, self.dom)
 
+    def diff(self, *gens):
+    	if len(gens) == 0:
+    		return sffpoly(diff(self.rep, self.var[0]), self.dom)
+    	else:
+    		return sffpoly(diff(self.rep, gens[0]), self.dom)
+
+    def toSFFConst(self):
+    	if self.is_const:
+    		return sffconst(self.rep, self.dom)
+
+
 class SFFConst(SFFPoly):
     def __truediv__(f,g):
-        return f * (g ** -1)
+        return f * g ** (f.dom.num - 2)
 
     def is_primitive(self):
         num_ = (self.dom.num - 1) // 2
@@ -304,29 +345,29 @@ def sffint(rep, dom):
     return SFFInt(rep, dom)
 
 def reduce(f, dom):
-    if not isinstance(f, Expr):
-        raise TypeError("reduce() argument must be an integer or an Expr object, not %s" % f.__class__.__name__)
-    elif isinstance(f, Integer) or isinstance(f, int):
-        f %= dom.mod
-        if f > dom.mod // 2:
-            return f - dom.mod
-        else:
-            return f
-    else:
-        var = poly(f).gens
-        f = expand(f)
-        for rel in dom.rel_list:
-            if rel['rep'] == 0 or not rel['var'] in var:
-                continue
-            f = simple_reduce(f, rel)
-        if isinstance(f, Integer) or isinstance(f, int):
-            f %= dom.mod
-            if f > dom.mod // 2:
-                return f - dom.mod
-            else:
-                return f
-        else:
-            return poly(f, domain=dom.as_sympy_FF()).as_expr()
+	if not isinstance(f, Expr):
+		raise TypeError("reduce() argument must be an integer or an Expr object, not %s" % f.__class__.__name__)
+	elif isinstance(f, Integer) or isinstance(f, int):
+		f %= dom.mod
+		if f > dom.mod // 2:
+			return f - dom.mod
+		else:
+			return f
+	else:
+		var = poly(f).gens
+		f = expand(f)
+		for rel in dom.rel_list:
+			if rel['rep'] == 0 or not rel['var'] in var:
+				continue
+			f = simple_reduce(f, rel)
+		if isinstance(f, Integer) or isinstance(f, int):
+			f %= dom.mod
+			if f > dom.mod // 2:
+				return f - dom.mod
+			else:
+				return f
+		else:
+			return poly(f, domain=dom.as_sympy_FF()).as_expr()
 
 def simple_reduce(f, rel):
     if not isinstance(f, Expr):
@@ -396,3 +437,9 @@ def simplify(ff, var):
         raise TypeError("argument must be a SFF object. not %s" % ff.__class__.__name__)
     minpoly_ = primitive_element(ff).minpoly(var)
     return sff(minpoly_, ff.mod)
+
+def lc(f, *gens):
+	if len(gens) == 0:
+		return LC(poly(f.rep), f.var[0])
+	else:
+		return LC(poly(f.rep), gens[0])
