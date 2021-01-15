@@ -278,7 +278,8 @@ class SFFPoly:
     def toSFFConst(self):
     	if self.is_const:
     		return sffconst(self.rep, self.dom)
-
+    	else:
+    		raise TypeError("cannot convert not constant elements to SFFConst")
 
 class SFFConst(SFFPoly):
     def __truediv__(f,g):
@@ -290,17 +291,17 @@ class SFFConst(SFFPoly):
             return False
         with SFFPool(os.cpu_count()) as p:
             try:
-                p.starmap_async(_is_primitive, self.with_factor_count_iter(num_)).get()
+                p.starmap_async(_is_primitive, self.iter_with_factor_count(num_)).get()
             except StopEval:
                 p.close()
                 return False
         return True
 
-    def with_count_iter(self, m):
+    def iter_with_count(self, m):
         for i in range(m):
             yield (self, i)
 
-    def with_factor_count_iter(self, m):
+    def iter_with_factor_count(self, m):
         for i in range(1, m):
             if m % i == 0:
                 yield (self, i)
@@ -314,6 +315,9 @@ class SFFConst(SFFPoly):
             p *= (var - self ** (self.dom.mod ** i))
         return reduce(p.rep, self.dom)
 
+    def toSFFConst(self):
+    	raise TypeError("this is already SFFConst")
+
 class SFFInt(SFFConst):
     def is_primitive(self):
         if self.dom.is_prime:
@@ -323,6 +327,9 @@ class SFFInt(SFFConst):
                 return False
         else:
             return False
+
+    def toSFFConst(self):
+    	raise TypeError("this is already SFFConst")
 
 def sffgen(rep, dom):
     if isinstance(rep, int) or isinstance(rep, Integer):
