@@ -4,6 +4,8 @@ from sympy.core.function import expand
 from sympy.ntheory.primetest import isprime
 from sympy.polys.polytools import LC, Poly, poly
 
+import random
+
 class SFF:
     """
         represents a splitted finite field of some polynomials
@@ -162,6 +164,9 @@ class SFF:
         for i in range(self.num):
             yield (self.element(i), args)
 
+    def rand(self):
+        return self.element(random.randint(0, self.num - 1))
+
     def point(self, n, i):
         if i > self.num ** n:
             raise ValueError
@@ -188,6 +193,11 @@ class SFF:
         n = len(gens)
         for i in range(self.num ** n):
             yield (poly, self.point_as_dict(i, gens), queue)
+
+    def extend(self, rep):
+        rel_ = [rel['rep'] for rel in self.rel_list]
+        rel_.append(rep)
+        return sff(rel_, self.mod)
 
 def sff(rel, mod):
     return SFF(rel, mod)

@@ -1,13 +1,12 @@
 from sympy.polys.polytools import Poly
-from sffpolytools import sffpoly, lc
+from sffpolytools import sffpoly, lc, SFFPoly, sffquotientpoly
 
 def sffgcd(f, g):
-	p, i = [f, g], 2
-	p.append(f % g)
-	while p[i] != 0:
-		p.append(p[i - 1] % p[i])
-		i += 1
-	return p[i - 1]
+	q = f % g
+	if q == 0:
+		return g
+	else:
+		return sffgcd(g, q)
 
 def sffsff_list(f):
 	if not f.is_uni:
@@ -51,4 +50,28 @@ def sfffactor_list_berlekamp(f):
 	if not isinstance(f, SFFPoly):
 		raise TypeError("needed a SFFPoly object, not %s" % f.__class__.__name__)
 	
-
+def sfffactor_equal_degree(f, d):
+	if not isinstance(f, SFFPoly):
+		raise TypeError("needed a SFFPoly object, not %s" % f.__class__.__name__)
+	r = f.degree() // d
+	q = f.dom.num
+	F = [f]
+	var = f.var[0]
+	while len(F) < r:
+		g = 0
+		for i in range(r * d):
+			g += f.dom.rand() * var ** i
+		g = sffquotientpoly(g, f.dom, f.rep)
+		g = g ** ((q ** d - 1) // 2) - 1
+		g = sffpoly(g.rep, f.dom)
+		F_1 = []
+		while len(F) > 0:
+			h = F.pop(-1)
+			z = sffgcd(h, g)
+			if z == 1 or z == h:
+				F_1.append(h)
+			else:
+				F_1.append(z)
+				F_1.append(h // z)
+		F = F_1
+	return F

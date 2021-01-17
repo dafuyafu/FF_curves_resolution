@@ -78,8 +78,11 @@ class SFFPoly:
         >>> f + g
         Ssffpoly(2 * x, x, modulus=5)
         """
-        if not isinstance(f, SFFPoly) or not isinstance(g, SFFPoly):
-            raise TypeError("cannot add %s and %s" % (f.__class__.__name__, g.__class__.__name__))
+        if not isinstance(g, SFFPoly):
+            if isinstance(g, int) or isinstance(g, Integer):
+                return sffpoly(reduce(f.rep + g, f.dom), f.dom)
+            else:
+                raise TypeError("cannot add %s and %s" % (f.__class__.__name__, g.__class__.__name__))
         if f.dom == g.dom:
             _add = reduce(f.rep + g.rep, f.dom)
             return sffpoly(_add, f.dom)
@@ -99,7 +102,10 @@ class SFFPoly:
         Ssffpoly(x, x, a, modulus=5)
         """
         if not isinstance(f, SFFPoly) or not isinstance(g, SFFPoly):
-            raise TypeError("cannot subtract %s and %s" % (f.__class__.__name__, g.__class__.__name__))
+            if isinstance(g, int) or isinstance(g, Integer):
+                return sffpoly(reduce(f.rep - g, f.dom), f.dom)
+            else:
+                raise TypeError("cannot add %s and %s" % (f.__class__.__name__, g.__class__.__name__))
         if f.dom == g.dom:
             _sub = reduce(f.rep - g.rep, f.dom)
             return sffpoly(_sub, f.dom)
@@ -152,7 +158,7 @@ class SFFPoly:
     		_div += sffpoly(_term, f.dom)
     		_mul = reduce(_term * g.rep, f.dom)
     		f -= sffpoly(_mul, f.dom)
-    		if f.rep == 0:
+    		if f == 0:
     			break
     	return _div
 
@@ -281,6 +287,113 @@ class SFFPoly:
     	else:
     		raise TypeError("cannot convert not constant elements to SFFConst")
 
+class SFFQuatientPoly(SFFPoly):
+    def __init__(self, rel, dom, quo): 
+        super().__init__(rel, dom)
+        mod = dom.mod
+        if quo == 0:
+            pass
+        else:
+            self.quo_list = []
+            if isinstance(quo, Expr):
+                if not LC(quo.as_poly()) == 1:
+                    quo = poly(quo.as_expr() * pow(LC(quo.as_poly()), mod - 2, mod), domain=dom.as_sympy_FF()).as_expr()
+                if len(poly(quo).gens) == 1:
+                    self.quo_list.append({'var': poly(quo).gens[0],
+                                          'rep': quo.as_expr(), 
+                                          'deg': poly(quo).degree()})
+                else:
+                    self.quo_list.append({'var': poly(quo).gens[0], 
+                                          'rep': quo.as_expr(), 
+                                          'deg': poly(quo).degree()})
+            elif isinstance(quo, list):
+                if isinstance(quo[0], dict):
+                    self.quo_list = quo
+                else:
+                    for _p in quo:
+                        if _p == 0:
+                            continue
+                        if not LC(_p.as_poly()) == 1:
+                            _p = poly(_p * pow(LC(_p.as_poly()), mod - 2, mod), domain=dom.as_sympy_FF()).as_expr()
+                        if len(poly(_p).gens) == 1:
+                            self.quo_list.append({'var': poly(_p).gens[0], 
+                                                  'rep': _p.as_expr(), 
+                                                  'deg': poly(_p).degree()})
+                        else:
+                            self.quo_list.append({'var': poly(_p).gens[0], 
+                                                  'rep': _p.as_expr(), 
+                                                  'deg': poly(_p).degree()})
+            else:
+                raise ValueError("the third argument needs to be 0, an Expr instance or list.")
+
+    def __repr__(self):
+        return "%s(%s, %s, over %s)" % (self.__class__.__name__, self.rep, self.dom.as_SFF(), self.quos())
+
+    def __add__(f, g):
+        add = super().__add__(g)
+        return sffquotientpoly(add.as_expr(), f.dom, f.quo_list)
+
+    def __sub__(f, g):
+        sub = super().__sub__(g)
+        return sffquotientpoly(sub.as_expr(), f.dom, f.quo_list)
+
+    def __mul__(f, g):
+        """
+        multiple two polynomials ``f`` and ``g``
+
+        Examples
+        ========
+
+        >>> f = Ssffpoly(x - a * y, a ** 2 - 2, domain='FF(5)')
+        >>> g = Ssffpoly(x - 2 * a * y, a ** 2 - 2, domain='FF(5)')
+        >>> f * g
+        Ssffpoly(x ** 2 + 2 * a * x * y - y ** 2, x, modulus=5)
+        """
+        if isinstance(g, int) or isinstance(g, Integer):
+            return sffpoly(f.rep * g, f.dom)
+        elif isinstance(g, SFFQuatientPoly):
+            if f.dom == g.dom:
+                _mul = reduce(f.rep * g.rep, f.dom)
+                for q in f.quo_list:
+                    _mul = simple_reduce(_mul, q)
+                return sffpoly(_mul, f.dom)
+            else:
+                raise ValueError("argument sffpolys have different domains")
+        elif isinstance(g, SFFPoly):
+            if f.dom == g.dom:
+                _mul = reduce(f.rep * g.rep, f.dom)
+                return sffpoly(_mul, f.dom)
+            else:
+                raise ValueError("argument sffpolys have different domains")
+        else:
+            raise TypeError("cannot multiple %s and %s" % (f.__class__.__name__, g.__class__.__name__))
+
+    def __pow__(f, e):
+        if not isinstance(e, int) and not isinstance(e, Integer):
+            raise TypeError("second argument needs to be an integer, not %s" % e.__class__.__name__)
+        if f.is_int:
+            return sffquotientpoly(f.rep ** e, f.dom, f.quo_list)
+        if e < 0:
+            e = f.dom.num + e - 1
+        if e == 0:
+            return sffquotientpoly(1, f.dom, f.quo_list)
+        if e == 1:
+            return f
+        num_ = bin(e).replace('0b','')
+        len_ = len(num_)
+        list_ = [(f, len_ - d - 1) for d in range(len_) if num_[d] == '1']
+        with Pool(os.cpu_count()) as p:
+            result = p.starmap(_pow_self_quo, list_)
+        pow_ = 1
+        for r in result:
+            pow_ = reduce(pow_ * r, f.dom)
+            for q in f.quo_list:
+                pow_ = simple_reduce(pow_, q)
+        return sffquotientpoly(reduce(pow_, f.dom), f.dom, f.quo_list)
+
+    def quos(self):
+        return [q['rep'] for q in self.quo_list]
+
 class SFFConst(SFFPoly):
     def __truediv__(f,g):
         return f * g ** (f.dom.num - 2)
@@ -331,15 +444,18 @@ class SFFInt(SFFConst):
     def toSFFConst(self):
     	raise TypeError("this is already SFFConst")
 
-def sffgen(rep, dom):
-    if isinstance(rep, int) or isinstance(rep, Integer):
-        return sffint(rep, dom)
-    elif isintance(rep, Expr):
-        var = [v for v in rep.as_poly().gens if not v in dom.var_list]
-        if len(var) == 0:
-            return sffconst(rep, dom)
-        else:
-            return sffpoly(rep, dom) 
+def sffgen(rep, dom, quo=0):
+    if quo == 0:
+        if isinstance(rep, int) or isinstance(rep, Integer):
+            return sffint(rep, dom)
+        elif isintance(rep, Expr):
+            var = [v for v in rep.as_poly().gens if not v in dom.var_list]
+            if len(var) == 0:
+                return sffconst(rep, dom)
+            else:
+                return sffpoly(rep, dom)
+    else:
+        return sffquotientpoly(rep, dom, quo)
 
 def sffpoly(rep, dom):
     """Constructor method for SFFPoly"""
@@ -350,6 +466,9 @@ def sffconst(rep, dom):
 
 def sffint(rep, dom):
     return SFFInt(rep, dom)
+
+def sffquotientpoly(rep, dom, quo):
+    return SFFQuatientPoly(rep, dom, quo)
 
 def reduce(f, dom):
 	if not isinstance(f, Expr):
@@ -411,10 +530,26 @@ def _eval_solve(f, p, q):
 		q.put(p)
 
 def _pow_self(f, n):
+    """ f needs to be an sffpoly element"""
     pow_ = f.rep
     for i in range(n):
         pow_ = reduce(pow_ * pow_, f.dom)
-    return pow_
+    if isinstance(pow_, int) or isinstance(pow_, Integer):
+        return pow_
+    else:
+        return poly(pow_, domain=f.dom.as_sympy_FF()).as_expr()
+
+def _pow_self_quo(f, n):
+    """ f needs to be an sffpoly element"""
+    pow_ = f.rep
+    for i in range(n):
+        pow_ = reduce(pow_ * pow_, f.dom)
+        for q in f.quo_list:
+            pow_ = simple_reduce(pow_, q)
+    if isinstance(pow_, int) or isinstance(pow_, Integer):
+        return pow_
+    else:
+        return poly(pow_, domain=f.dom.as_sympy_FF()).as_expr()
 
 def _is_primitive(f, i):
     if f ** i == -1:
