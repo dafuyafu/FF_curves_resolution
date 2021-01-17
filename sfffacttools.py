@@ -1,5 +1,5 @@
 from sympy.polys.polytools import Poly
-from sffpolytools import sffpoly, lc, SFFPoly, sffquotientpoly
+from sffpolytools import sffpoly, lc, SFFPoly, SFFQuotientPoly, sffquotientpoly
 
 def sffgcd(f, g):
 	q = f % g
@@ -58,12 +58,8 @@ def sfffactor_equal_degree(f, d):
 	F = [f]
 	var = f.var[0]
 	while len(F) < r:
-		g = 0
-		for i in range(r * d):
-			g += f.dom.rand() * var ** i
-		g = sffquotientpoly(g, f.dom, f.rep)
-		g = g ** ((q ** d - 1) // 2) - 1
-		g = sffpoly(g.rep, f.dom)
+		g = SFFQuotientPoly.random_poly(var, f.dom, r * d, f.rep)
+		g = sffpoly((g ** ((q ** d - 1) // 2) - 1).rep, f.dom)
 		F_1 = []
 		while len(F) > 0:
 			h = F.pop(-1)

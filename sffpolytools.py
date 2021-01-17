@@ -287,7 +287,17 @@ class SFFPoly:
     	else:
     		raise TypeError("cannot convert not constant elements to SFFConst")
 
-class SFFQuatientPoly(SFFPoly):
+    @classmethod
+    def random_poly(cls, var, dom, deg, quo=0):
+        p = 0
+        for i in range(deg):
+            p += dom.rand() * var ** i
+        if quo == 0:
+            return cls(p, dom)
+        else:
+            return cls(p, dom, quo)
+
+class SFFQuotientPoly(SFFPoly):
     def __init__(self, rel, dom, quo): 
         super().__init__(rel, dom)
         mod = dom.mod
@@ -468,7 +478,7 @@ def sffint(rep, dom):
     return SFFInt(rep, dom)
 
 def sffquotientpoly(rep, dom, quo):
-    return SFFQuatientPoly(rep, dom, quo)
+    return SFFQuotientPoly(rep, dom, quo)
 
 def reduce(f, dom):
 	if not isinstance(f, Expr):
